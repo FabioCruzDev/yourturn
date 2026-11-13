@@ -574,5 +574,13 @@
  "Teste desconhecido": "Unknown test",
  "Concluir configuração": "Finish setup",
  "✓ 1 repositório git encontrado": "✓ 1 git repository found",
- "A organização ativa ({org}) está sem login no Claude: as sessões e os resumos dela não funcionam.": "The active organization ({org}) is not logged in to Claude: its sessions and summaries don't work."
+ "A organização ativa ({org}) está sem login no Claude: as sessões e os resumos dela não funcionam.": "The active organization ({org}) is not logged in to Claude: its sessions and summaries don't work.",
+ "{n} subagentes": "{n} subagents",
+ "1 subagente": "1 subagent",
+ "Hooks corrigidos. Sessões já abertas só passam a usá-los depois de reiniciadas.": "Hooks fixed. Sessions already open only start using them after a restart.",
+ "Os hooks do Claude Code que avisam o quadro quando uma sessão espera você estão faltando ou desatualizados em {dirs}: sem eles o estado das sessões é adivinhado pela tela.": "The Claude Code hooks that tell the board when a session is waiting for you are missing or outdated in {dirs}: without them the session state is guessed from the screen.",
+ "Corrigir hooks": "Fix hooks",
+ "Instala os hooks do quadro no <code>settings.json</code> do Claude Code (se ainda não estiverem lá), para saber quando cada sessão espera você.": "Installs the board's hooks in Claude Code's <code>settings.json</code> (if they aren't there yet), so it knows when each session is waiting for you.",
+ "settings.json inválido em {dirs}: corrija o arquivo e tente de novo": "Invalid settings.json in {dirs}: fix the file and try again",
+ "Regravar os hooks do quadro em {dirs} apontando para {hook}? (guarda uma cópia em settings.json.bak-kanban)": "Rewrite the board's hooks in {dirs} pointing to {hook}? (keeps a copy in settings.json.bak-kanban)"
 }

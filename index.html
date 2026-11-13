@@ -945,6 +945,17 @@ async function orgLogin(org) {
   } catch (e) { alert(e.message); }
 }
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-org-login]"); if (b) orgLogin(b.dataset.orgLogin); });
+// Hooks do Claude Code faltando ou apontando para outra pasta: o botão do aviso regrava em todas as pastas de config
+async function hooksFix(b) {
+  const hs = st.hooks || [];
+  if (!confirm(t("Regravar os hooks do quadro em {dirs} apontando para {hook}? (guarda uma cópia em settings.json.bak-kanban)",
+    { dirs: hs.map(h => h.dir).join(", "), hook: hs[0]?.hook || "hook.py" }))) return;
+  b.disabled = true;
+  try { st.hooks = (await api("/api/hooks/fix", {})).hooks; alert(t("Hooks corrigidos. Sessões já abertas só passam a usá-los depois de reiniciadas.")); }
+  catch (e) { alert(e.message); }
+  st.bannerHtml = ""; renderStatus(null);
+}
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-hooks-fix]"); if (b) hooksFix(b); });
 async function ghLogin(org) {
   try { const r = await api("/api/org/gh-login", { org }); pinned.add(r.id); savePinned(); openWin(r.id); tick(); } catch (e) { alert(e.message); }
 }
@@ -1032,6 +1043,7 @@ function suSummary() {
   const items = [t("Cria o espaço “{name}” para a pasta {path} (fica em ~/.config/claude-orgs/{id}/, com as chaves em arquivos que só você lê).", { name: esc(name), path: esc(path), id: esc(id) }),
     $("#su-claude").checked && su.info?.claude_login ? t("Usa o login do Claude e do gh que já existem nesta máquina.") : t("Cria ~/.claude-{id} para um login separado do Claude (você entra no fim).", { id: esc(id) }),
     t("Acrescenta um bloco no ~/.bashrc para o <code>claude</code> e o <code>gh</code> escolherem o espaço pela pasta."),
+    t("Instala os hooks do quadro no <code>settings.json</code> do Claude Code (se ainda não estiverem lá), para saber quando cada sessão espera você."),
     $("#su-email").value.trim() && t("Acrescenta no ~/.gitconfig o e-mail dos commits para as pastas deste espaço.")];
   $("#su-sum").innerHTML = items.filter(Boolean).map(x => `<li>${x}</li>`).join("");
 }
@@ -1331,7 +1343,8 @@ function render() {
 
 function sessHtml(s) {
   const tone = { working: "work", waiting: "bad" }[s.status] || "";
-  const label = { working: t("trabalhando"), waiting: t("aguardando você"), idle: t("parada") }[s.status];
+  const label = { working: t("trabalhando"), waiting: t("aguardando você"), idle: t("parada") }[s.status]
+    + (s.agents ? " · " + (s.agents > 1 ? t("{n} subagentes", { n: s.agents }) : t("1 subagente")) : "");
   const ui = st.ui, sid = s.id;
   let body;
   if (!s.window) {
@@ -1548,6 +1561,7 @@ function renderStatus(err) {
   $("#t-cc").textContent = err ? t("servidor fora do ar") : t("{n} no tmux · {m} recentes", { n: st.sessions.filter(s => s.window).length, m: st.sessions.length });
   const ao = orgOf(st.activeOrg);
   const noOrg = st.orgs && !st.orgs.length && !err;
+  const badHooks = (st.hooks || []).filter(h => h.status !== "ok");
   const html = [noOrg ? `${t("Conecte o quadro às suas ferramentas (Linear ou Jira, GitHub, Slack).")} <button type="button" class="primary" data-open-setup>${t("Configurar")}</button>`
       : st.linErr && esc(st.linErr), err && esc(t("Não consegui falar com o servidor local ({err}). Ele está rodando? python3 server.py", { err })),
     ao && !ao.login && `${t(st.voice ? "A organização ativa ({org}) está sem login no Claude: o Jarvis e os resumos não funcionam nela." : "A organização ativa ({org}) está sem login no Claude: as sessões e os resumos dela não funcionam.", { org: esc(ao.name) })}
@@ -1555,7 +1569,9 @@ function renderStatus(err) {
     ao && ao.gh_login === false && `${t("A organização ativa ({org}) está sem login no GitHub: PRs nos cards, <code>gh</code> e <code>git push</code> dela não funcionam.", { org: esc(ao.name) })}
       <button type="button" class="primary" data-gh-login="${esc(ao.id)}">${t("Entrar no GitHub da {org}", { org: esc(ao.name) })}</button>`,
     ao && ao.ssh_key === false && `${t("A organização ativa ({org}) usa Bitbucket e ainda não tem chave SSH: clone e <code>git push</code> dela não funcionam.", { org: esc(ao.name) })}
-      <button type="button" class="primary" data-bb-login="${esc(ao.id)}">${t("Configurar Bitbucket da {org}", { org: esc(ao.name) })}</button>`]
+      <button type="button" class="primary" data-bb-login="${esc(ao.id)}">${t("Configurar Bitbucket da {org}", { org: esc(ao.name) })}</button>`,
+    !err && badHooks.length && `${t("Os hooks do Claude Code que avisam o quadro quando uma sessão espera você estão faltando ou desatualizados em {dirs}: sem eles o estado das sessões é adivinhado pela tela.", { dirs: badHooks.map(h => `<code>${esc(h.dir)}</code>`).join(", ") })}
+      <button type="button" class="primary" data-hooks-fix>${t("Corrigir hooks")}</button>`]
     .filter(Boolean).map(m => `<div class="banner">${m}</div>`).join("");
   if (html !== st.bannerHtml) { st.bannerHtml = html; $("#banners").innerHTML = html; } // não recria o botão no meio do clique
 }
@@ -1566,7 +1582,7 @@ async function tick() {
     const s = await api("/api/state");
     syncLang(s.settings, (lang) => api("/api/settings", { lang }).catch(() => {}));
     if (st.voice === undefined) { $("#vc-form").hidden = !s.voice; if (s.voice) setWake(vc.wake); } // Jarvis só com KANBAN_VOICE=1
-    Object.assign(st, { voice: !!s.voice, tts: !!s.tts, issues: s.issues, sessions: s.sessions, repos: s.repos, linErr: s.linear_error, linearCount: s.linear_count, cards: s.cards || {}, settings: s.settings || {}, orgs: s.orgs || [], activeOrg: s.active_org, repoInfo: s.repo_info || {}, slack: s.slack || {}, hibernated: s.hibernated || {} });
+    Object.assign(st, { voice: !!s.voice, tts: !!s.tts, issues: s.issues, sessions: s.sessions, repos: s.repos, linErr: s.linear_error, linearCount: s.linear_count, cards: s.cards || {}, settings: s.settings || {}, orgs: s.orgs || [], activeOrg: s.active_org, repoInfo: s.repo_info || {}, slack: s.slack || {}, hibernated: s.hibernated || {}, hooks: s.hooks || [] });
     renderSlack();
     applyEco(!!st.settings.eco);
     renderOrgSel();

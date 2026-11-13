@@ -37,11 +37,16 @@ Sem dependências: biblioteca padrão do Python + um arquivo HTML. Sem build.
 ```bash
 git clone https://github.com/FabioCruzDev/yourturn.git ~/yourturn
 cd ~/yourturn
-python3 tools/install_hooks.py   # põe os hooks do quadro no ~/.claude/settings.json (idempotente, guarda backup)
-./start.sh                       # sobe o quadro no tmux; abra http://localhost:8765
+./start.sh   # confere as dependências, instala os hooks, sobe o quadro no tmux e abre http://localhost:8765
 ```
 
-`tools/install_hooks.py --remove` tira os hooks. Sessões já abertas só passam a usar os hooks depois de reiniciadas.
+Se faltar algo, o `start.sh` diz exatamente o que instalar (Python 3.10+ e `tmux` são obrigatórios; `git` e `claude` só
+geram aviso). Na primeira vez ele põe os hooks do quadro no `settings.json` do Claude Code (`~/.claude` e a pasta de cada
+organização; idempotente, guarda `settings.json.bak-kanban`): é por eles que o quadro sabe quando uma sessão espera você.
+Hooks do quadro que já existem apontando para outro lugar não são sobrescritos: o quadro mostra um aviso com o botão
+**Corrigir hooks**. `python3 tools/install_hooks.py --status` mostra o estado, `--remove` tira os hooks (ponha
+`KANBAN_NO_HOOKS=1` no `local.env` para o `start.sh` não devolvê-los) e `KANBAN_NO_BROWSER=1` não abre o navegador.
+Sessões já abertas só passam a usar os hooks depois de reiniciadas.
 Para subir no login, chame o `start.sh` na inicialização (unit de usuário do systemd, `.profile` ou, no Windows, um
 atalho para `wsl.exe -- bash -lc "~/yourturn/start.sh"`).
 

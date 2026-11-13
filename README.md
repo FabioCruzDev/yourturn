@@ -36,11 +36,16 @@ Zero dependencies: Python standard library + one HTML file. No build step.
 ```bash
 git clone https://github.com/FabioCruzDev/yourturn.git ~/yourturn
 cd ~/yourturn
-python3 tools/install_hooks.py   # adds the board's hooks to ~/.claude/settings.json (idempotent, keeps a backup)
-./start.sh                       # starts the board inside tmux; open http://localhost:8765
+./start.sh   # checks dependencies, installs the hooks, starts the board in tmux and opens http://localhost:8765
 ```
 
-`tools/install_hooks.py --remove` takes the hooks out. Sessions that were already open only pick the hooks up after a
+`start.sh` tells you exactly what to install if something is missing (Python 3.10+ and `tmux` are required; it only
+warns about `git` and `claude`). On the first run it adds the board's hooks to the Claude Code `settings.json`
+(`~/.claude` and each organization's folder; idempotent, keeps a `settings.json.bak-kanban`); that is how the board knows
+when a session is waiting for you. It never overwrites existing board hooks that point elsewhere: the board shows a
+warning with a **Fix hooks** button instead. `python3 tools/install_hooks.py --status` shows the state,
+`--remove` takes the hooks out (set `KANBAN_NO_HOOKS=1` in `local.env` so `start.sh` doesn't add them back), and
+`KANBAN_NO_BROWSER=1` stops it from opening the browser. Sessions that were already open only pick the hooks up after a
 restart. To start the board when you log in, call `start.sh` from your session startup (systemd user unit, `.profile`,
 or on Windows a shortcut to `wsl.exe -- bash -lc "~/yourturn/start.sh"`).
 

@@ -326,16 +326,38 @@ def hook_state(sid):
         return None
 
 
-def live_status(sid, window, now):
+def live_status(sid, window, now, agents=0):
     """Trabalhando ou esperando você. Os hooks dizem quando o turno acaba (Stop) e quando ele
     pede algo (permissão, pergunta); a tela cobre o resto (Esc interrompe sem hook)."""
     r = tmux("capture-pane", "-p", "-t", f"{TMUX}:{window}", check=False)
-    return decide_status(r.stdout if r.returncode == 0 else "", hook_state(sid), now)
+    return decide_status(r.stdout if r.returncode == 0 else "", hook_state(sid), now, agents)
 
 
-def decide_status(text, h, now):
+AGENT_FRESH = 600  # s sem gravar e o subagente conta como morto (p99 do maior intervalo entre registros: ~750 s)
+
+
+def agents_running(path, now):
+    """Subagentes da sessão ainda rodando: <sessão>/subagents/agent-*.jsonl cujo .meta.json não tem `finished` e que
+    gravou há pouco (sessão morta deixa meta sem `finished` para sempre). Devolve (quantos, mtime mais recente)."""
+    n, latest = 0, 0
+    for j in path.with_suffix("").glob("subagents/agent-*.jsonl"):
+        try:
+            mtime = j.stat().st_mtime
+            if now - mtime > AGENT_FRESH or json.loads(j.with_suffix(".meta.json").read_text()).get("finished"):
+                continue
+        except (OSError, ValueError):
+            continue
+        n, latest = n + 1, max(latest, mtime)
+    return n, latest
+
+
+def decide_status(text, h, now, agents=0):
     if MENU.search(text):
         return "waiting"  # permissão ou pergunta com opções na tela
+    if agents and (text or not (h and h.get("state") == "waiting" and h.get("event") in ("PermissionRequest", "PreToolUse"))):
+        # o turno principal parou, mas subagentes seguem trabalhando (e vão retomá-lo). Com tela, só o MENU acima conta
+        # como pedido: o auto mode dispara PermissionRequest mesmo aprovando sozinho
+        return "working"
     spinning = spinner_visible(text)
     if h and h.get("event") in ("Stop", "StopFailure") and not (spinning and now - h["ts"] > 3):
         return "waiting"  # turno terminou
@@ -487,6 +509,11 @@ def sessions():
         if not s:
             continue
         s["prompt"] = prompt_of(p, mtime, recs)
+        agents, agents_mtime = agents_running(p, now)
+        if agents:
+            s["agents"], s["updated"] = agents, max(mtime, agents_mtime)
+            if s["status"] != "working":
+                s["status"] = "working"  # o jsonl principal fica parado enquanto os subagentes trabalham
         s["config"] = str(p.parents[2]) if p.parents[1] != PROJECTS else None  # o --resume precisa da mesma conta
         info = launched.get(s["id"], {})
         s["issue"] = info.get("issue", "")
@@ -494,7 +521,7 @@ def sessions():
         if info.get("closed") and not s["window"]:
             continue  # você encerrou pelo quadro: some do card
         if s["window"]:
-            s["status"] = live_status(s["id"], s["window"], now) or ("waiting" if s["status"] == "idle" else s["status"])
+            s["status"] = live_status(s["id"], s["window"], now, agents) or ("waiting" if s["status"] == "idle" else s["status"])
         out[s["id"]] = s
     # Lançada agora há pouco e o jsonl ainda não existe
     for sid, info in launched.items():
@@ -763,7 +790,45 @@ def org_create(body):
         return {"orgs": org_list(), "updated": changed}
     co.add(org, [p for p in paths if p.strip()], use_default_claude=bool(body.get("use_default_claude")),
            **{k: str(body.get(k) or "") for k in ("name", "color", "github_org", "email") + tools})
+    try:
+        hooks_fix(only_missing=True)  # pasta nova (ou base sem hooks): o quadro precisa deles para saber o estado
+    except (OSError, ValueError) as e:
+        print(f"hooks: {e}", flush=True)  # o aviso do quadro mostra o que falta
     return {"orgs": org_list()}
+
+
+# ---------- hooks do Claude Code (o estado das sessões vem deles: tools/install_hooks.py) ----------
+
+def install_hooks_mod():
+    import importlib
+    import sys
+    if str(HERE / "tools") not in sys.path:
+        sys.path.insert(0, str(HERE / "tools"))
+    return importlib.import_module("install_hooks")
+
+
+def hooks_status():
+    """[{dir, org, status}] de cada pasta de config do Claude que o quadro usa (a base e cada organização). status: ok,
+    missing, partial, stale (outro hook.py, ex.: a pasta do quadro mudou) ou invalid (settings.json quebrado)."""
+    ih, names = install_hooks_mod(), {d: o for o, d, _ in orgs()}
+    return [{"dir": ih.show(d), "org": names.get(d), "status": ih.status(d), "hook": ih.show(ih.HOOK)}
+            for d in ih.config_dirs(PROJECTS.parent, ORGS_FILE)]
+
+
+def hooks_fix(body=None, only_missing=False):
+    """Grava os hooks do quadro em todas as pastas (ou só nas que não têm nenhum), com o MESMO comando em todas: o
+    settings de uma organização é a base mesclada com o dela, e comandos diferentes viram hook rodando 2x."""
+    import sys
+    ih = install_hooks_mod()
+    dirs = ih.config_dirs(PROJECTS.parent, ORGS_FILE)
+    python = ih.python_in_use(dirs, sys.executable)
+    bad = [d for d in dirs if ih.status(d) == "invalid"]
+    for d in dirs:
+        if d not in bad and (ih.status(d) == "missing" or not only_missing):
+            ih.install(d, python)
+    if bad:
+        raise ValueError(tr("settings.json inválido em {dirs}: corrija o arquivo e tente de novo", dirs=", ".join(ih.show(d) for d in bad)))
+    return {"hooks": hooks_status()}
 
 
 # ---------- assistente de configuração (1ª execução, sem nenhuma organização) ----------
@@ -2442,7 +2507,7 @@ class Handler(BaseHTTPRequestHandler):
                                     "linear_error": err, "sessions": sessions(),
                                     "repos": launch_dirs(), "tmux": TMUX,
                                     "repo_info": {p: {"org": org_of(p), "git": (Path(p) / ".git").exists()} for p in launch_dirs()},
-                                    "slack": slack_state(), "hibernated": hibernated()})
+                                    "slack": slack_state(), "hibernated": hibernated(), "hooks": hooks_status()})
         if self.path.startswith("/api/slack/history?"):
             try:
                 return self._json(200, slack_history({k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}))
@@ -2600,7 +2665,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(403, {"error": "forbidden"})
         actions = {"/api/launch": launch, "/api/resume": resume, "/api/send": send, "/api/link": link, "/api/kill": kill, "/api/card": card_update, "/api/settings": settings_update, "/api/summary": summary,
                    "/api/push/subscribe": push_subscribe, "/api/push/unsubscribe": push_unsubscribe, "/api/push/test": push_test,
-                   "/api/task/create": task_create, "/api/task/update": task_update, "/api/org/create": org_create,
+                   "/api/task/create": task_create, "/api/task/update": task_update, "/api/org/create": org_create, "/api/hooks/fix": hooks_fix,
                    "/api/setup/info": setup_info, "/api/setup/scan": setup_scan, "/api/setup/test": setup_test,
                    "/api/org/login": org_login, "/api/org/gh-login": org_gh_login, "/api/org/bitbucket": org_bitbucket,
                    "/api/eco": eco, "/api/slack/read": slack_read, "/api/slack/reply": slack_reply,

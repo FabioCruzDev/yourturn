@@ -487,4 +487,67 @@ server.load_settings = lambda: {"hibernate_hours": 2, "eco": True}  # na economi
 assert server.hibernate_idle(_now) == []
 server.sessions, server.tmux, server.load_settings = _ss, _tm, _ls
 server.ORGS_FILE = _o / "nao-existe.tsv"
+
+# Subagentes: o turno principal parou (Stop / jsonl parado), mas eles seguem trabalhando → não é "aguardando você"
+import os as _os, time as _time
+_sa = _P(_tmp.mkdtemp()) / "proj"; _sa.mkdir()
+_main = _sa / "aaaaaaaa-0000-0000-0000-000000000001.jsonl"
+_main.write_text(_json.dumps({**base, "sessionId": _main.stem, "type": "system", "subtype": "turn_duration"}))
+(_sa / _main.stem / "subagents").mkdir(parents=True)
+def _agent(name, meta, age):
+    j = _sa / _main.stem / "subagents" / f"agent-{name}.jsonl"
+    j.write_text("{}"); (_sa / _main.stem / "subagents" / f"agent-{name}.meta.json").write_text(_json.dumps(meta))
+    _os.utime(j, (_time.time() - age,) * 2)
+_agent("fim", {"finished": True}, 5)          # terminou
+_agent("morto", {}, server.AGENT_FRESH + 60)   # sessão morta: meta sem finished para sempre
+_now = _time.time()
+assert server.agents_running(_main, _now)[0] == 0
+_agent("vivo", {"requestShape": "background"}, 5)
+assert server.agents_running(_main, _now)[0] == 1
+assert decide_status(idle, H("waiting", "Stop", 99), 100, agents=1) == "working"                # Stop com agentes de fundo
+assert decide_status(idle, H("working", "PostToolUse", 50), 100, agents=1) == "working"         # subagente pensando há >20 s
+assert decide_status(menu + "\n" + box, H("working", "PostToolUse", 99), 100, agents=1) == "waiting"  # permissão na tela vale
+assert decide_status(idle, H("waiting", "PermissionRequest", 99), 100, agents=1) == "working"   # auto mode aprovou: só o menu conta
+assert decide_status("", H("waiting", "PermissionRequest", 99), 100, agents=1) == "waiting"     # sem tela: o hook manda
+assert decide_status("", H("waiting", "PreToolUse", 99), 100, agents=1) == "waiting"            # AskUserQuestion
+_saved = server.session_files, server.tmux_windows, server.load_launched
+server.session_files, server.tmux_windows, server.load_launched = lambda: [_main], set, dict
+try:
+    [_s] = server.sessions()
+    assert _s["status"] == "working" and _s["agents"] == 1, _s
+    _os.utime(_main, (_now - 3 * 3600,) * 2)  # jsonl principal parado há horas: não vira idle nem hiberna
+    [_s] = server.sessions()
+    assert _s["status"] == "working" and _now - _s["updated"] < 60, _s
+    (_sa / _main.stem / "subagents" / "agent-vivo.meta.json").write_text(_json.dumps({"finished": True}))
+    _os.utime(_main, (_now,) * 2)
+    [_s] = server.sessions()
+    assert _s["status"] == "waiting" and "agents" not in _s, _s
+finally:
+    server.session_files, server.tmux_windows, server.load_launched = _saved
+# Hooks: o aviso do quadro e o "Corrigir" gravam o MESMO comando na base e em cada organização (o sync mescla os dois)
+_hk = _P(_tmp.mkdtemp())
+_saved_h = server.PROJECTS, server.ORGS_FILE
+server.PROJECTS, server.ORGS_FILE = _hk / "base" / "projects", _hk / "orgs.tsv"
+server.ORGS_FILE.write_text(f"tiv\t{_hk}/org\t/x\n")
+(_hk / "org").mkdir()
+(_hk / "org" / "settings.json").write_text(_json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "python3 /velho/kanban/hook.py"}]}]}}))
+try:
+    assert [(h["org"], h["status"]) for h in server.hooks_status()] == [(None, "missing"), ("tiv", "stale")], server.hooks_status()
+    server.hooks_fix(only_missing=True)  # o que o assistente faz: só onde não há nenhum
+    assert [h["status"] for h in server.hooks_status()] == ["ok", "stale"]
+    assert all(h["status"] == "ok" for h in server.hooks_fix({})["hooks"])
+    _ih = server.install_hooks_mod()
+    _cmds = lambda d: {h["command"] for gs in _ih.read(d)[1]["hooks"].values() for g in gs for h in g["hooks"]}
+    assert _cmds(_hk / "base") == _cmds(_hk / "org") and len(_cmds(_hk / "org")) == 1, (_cmds(_hk / "base"), _cmds(_hk / "org"))
+    import importlib, sys as _sys
+    _co = importlib.import_module("claude_orgs")
+    _m = _co.merge(_ih.read(_hk / "base")[1], _ih.read(_hk / "org")[1])  # o que o sync grava na organização
+    assert all(len(v) == 1 for v in _m["hooks"].values()), _m["hooks"]
+    (_hk / "org" / "settings.json").write_text("{x")
+    try:
+        server.hooks_fix({}); raise AssertionError("aceitou settings.json quebrado")
+    except ValueError:
+        pass
+finally:
+    server.PROJECTS, server.ORGS_FILE = _saved_h
 print("ok")
