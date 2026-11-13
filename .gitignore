@@ -1,0 +1,15 @@
+# Dados de uso do quadro (mudam o tempo todo)
+launched.json
+tasks.json
+board.json
+settings.json
+push_subs.json
+eco.json
+slack_seen.json
+slack_hidden.json
+hibernated.json
+# Configuração local
+local.env
+# Cópias de segurança das edições e cache do Python
+.bak/
+__pycache__/

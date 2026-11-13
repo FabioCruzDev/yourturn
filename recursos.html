@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recursos da máquina</title>
+<script src="/i18n.js"></script>
+<script>/* reserva: servidor sem /i18n.js (antigo, ainda não reiniciado) → tudo em pt-BR */if (!window.t) { window.LANG = "pt-BR"; window.t = (s, v) => v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m)) : s; window.translateDom = () => {}; window.syncLang = () => {}; }</script>
+<style>
+:root{--bg:#0a1224;--card:#141d33;--line:#2a3654;--fg:#e9edf7;--muted:#9daac8;--accent:#4f8cff;--ok:#2ec27e;--warn:#f5a524;--bad:#e5484d;
+  --used:#4f8cff;--cache:#a259c4;--vm:#f5a524;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:dark}
+:root[data-theme="light"]{--bg:#f4f6fb;--card:#fff;--line:#d8deea;--fg:#1b2333;--muted:#5d6b85;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;
+  display:flex;flex-direction:column;gap:14px;max-width:1500px;margin-inline:auto}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+h1{font-size:1.25rem;margin:0;flex:1;min-width:12em}h1 small{display:block;font-size:.75rem;font-weight:400;color:var(--muted)}
+h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px}
+button,a.btn{font:inherit;font-size:.82rem;background:transparent;color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:5px 11px;
+  cursor:pointer;text-decoration:none}
+button:hover,a.btn:hover{border-color:var(--accent)}button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}button.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 50%,var(--line))}
+button[aria-pressed="true"]{border-color:var(--ok);color:var(--ok)}
+.banner{border:1px solid var(--line);border-left:3px solid var(--warn);background:var(--card);border-radius:7px;padding:8px 12px}
+.banner.bad{border-left-color:var(--bad)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.big{font-size:1.9rem;font-weight:700;line-height:1.1}.big small{font-size:.85rem;font-weight:400;color:var(--muted)}
+.sub{color:var(--muted);font-size:.8rem}
+.bar{height:10px;border-radius:5px;background:color-mix(in srgb,var(--fg) 10%,transparent);display:flex;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:.75rem;color:var(--muted)}.legend b{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.cores{display:grid;grid-template-columns:repeat(auto-fill,minmax(26px,1fr));gap:4px;margin-top:8px}
+.core{height:34px;border-radius:4px;background:color-mix(in srgb,var(--fg) 8%,transparent);position:relative;overflow:hidden}
+.core i{position:absolute;left:0;right:0;bottom:0;background:var(--used)}
+.core span{position:absolute;inset:0;display:grid;place-items:center;font-size:.62rem;font-family:var(--mono);color:var(--fg)}
+svg.chart{width:100%;height:150px;display:block}
+svg.chart text{fill:var(--muted);font-size:10px;font-family:var(--mono)}
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:7px 8px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent);vertical-align:middle}
+td.num{text-align:right;font-family:var(--mono);white-space:nowrap}
+tr.grp{cursor:pointer}tr.grp:hover td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+tr.proc td{font-size:.78rem;color:var(--muted);background:color-mix(in srgb,var(--fg) 3%,transparent)}
+tr.proc td.cmd{font-family:var(--mono);max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kind{font-size:.68rem;font-weight:600;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.kind.session{color:var(--accent);border-color:var(--accent)}.kind.jarvis{color:var(--cache);border-color:var(--cache)}
+.kind.leftover{color:var(--warn);border-color:var(--warn)}.kind.system{opacity:.75}
+.share{display:inline-block;height:6px;border-radius:3px;background:var(--used);vertical-align:middle;margin-left:6px;opacity:.7}
+.tablewrap{overflow-x:auto}
+.state{font-size:.72rem;font-weight:600}.state.running{color:var(--ok)}.state.exited{color:var(--muted)}
+.msg{font-size:.8rem;color:var(--muted)}
+.why{font-size:.7rem;padding:1px 7px;border-radius:999px;border:1px solid var(--ok);color:var(--ok);margin-left:4px;white-space:nowrap}
+.blocked{font-size:.7rem;padding:1px 7px;border-radius:999px;border:1px solid var(--warn);color:var(--warn);white-space:nowrap}
+tr.suggest td:first-child{border-left:3px solid var(--ok)}
+code{font-family:var(--mono);font-size:.78rem;background:color-mix(in srgb,var(--fg) 8%,transparent);padding:1px 5px;border-radius:4px}
+@media (max-width:700px){body{padding:10px}.big{font-size:1.5rem}td.cmd{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Recursos da máquina<small id="updated">carregando…</small></h1>
+  <a class="btn" href="/">← Quadro</a>
+  <button type="button" id="drop" title="Libera o cache de disco do Linux">Liberar cache</button>
+  <button type="button" id="eco" aria-pressed="false" title="Fecha as sessões do quadro, para containers e libera cache">Economia</button>
+  <span class="msg" id="out"></span>
+</header>
+<div id="alerts"></div>
+<section class="grid" id="panels"></section>
+<section class="grid">
+  <div class="panel"><h2>CPU · últimos 30 min</h2><svg class="chart" id="ch-cpu" viewBox="0 0 600 150" preserveAspectRatio="none"></svg></div>
+  <div class="panel"><h2>Memória · últimos 30 min</h2><svg class="chart" id="ch-mem" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
+    <div class="legend"><span><b style="background:var(--used)"></b>Linux em uso</span><span><b style="background:var(--cache)"></b>cache de disco</span><span class="wsl-only" hidden><b style="background:var(--vm)"></b>VmmemWSL (Windows)</span></div></div>
+</section>
+<section class="panel"><h2>Quem está consumindo</h2><div class="tablewrap"><table id="groups"></table></div>
+  <p class="msg">Clique num grupo para ver os processos. Sessões do Claude se encerram como no card (a conversa fica salva); processos de sistema, do quadro e do tmux são protegidos.</p></section>
+<section class="panel"><h2>Liberar espaço em disco</h2>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="button" id="scan">Analisar</button><span class="msg" id="scan-msg"></span></div>
+  <div id="vhdx"></div><div class="tablewrap"><table id="clean"></table></div></section>
+<section class="panel"><h2>Containers Docker</h2><div class="tablewrap"><table id="docker"></table></div></section>
+<script>
+translateDom();
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const dec = (s) => LANG === "en-US" ? s : s.replace(".", ","); // separador decimal do idioma
+const mb = (v) => v == null ? "—" : v >= 1024 ? `${dec((v / 1024).toFixed(1))} GB` : `${Math.round(v)} MB`;
+const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+const pl = (n, one, many, vars) => t(n === 1 ? one : many, { n, ...vars }); // singular/plural nas duas línguas
+try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch {}
+const open = new Set();
+let snap = null;
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  return j;
+}
+const say = (s) => { $("#out").textContent = s; clearTimeout(say.t); say.t = setTimeout(() => { $("#out").textContent = ""; }, 8000); };
+
+function panels(s) {
+  const m = s.mem, w = s.windows, c = s.cpu;
+  const memBar = `<div class="bar"><i style="width:${pct(m.used, m.total)}%;background:var(--used)"></i><i style="width:${pct(m.cache, m.total)}%;background:var(--cache)"></i></div>`;
+  const cores = c.cores.map((v, k) => `<div class="core" title="${esc(t("núcleo {k}: {v}%", { k, v }))}"><i style="height:${Math.min(100, v)}%"></i><span>${Math.round(v)}</span></div>`).join("");
+  $("#panels").innerHTML = `
+    <div class="panel"><h2>CPU</h2><div class="big">${Math.round(c.total)}%<small> ${t("de {n} núcleos", { n: c.n })}</small></div>
+      <div class="sub">${t("carga 1/5/15 min: {load} · {n} processos", { load: c.load.map(x => dec(x.toFixed(2))).join(" · "), n: s.procs })}</div><div class="cores">${cores}</div></div>
+    <div class="panel"><h2>${s.wsl ? t("Memória do Linux (WSL)") : t("Memória")}</h2><div class="big">${mb(m.used)}<small> ${t("em uso de {total}", { total: mb(m.total) })}</small></div>${memBar}
+      <div class="legend"><span><b style="background:var(--used)"></b>${t("em uso {v}", { v: mb(m.used) })}</span><span><b style="background:var(--cache)"></b>${t("cache {v}", { v: mb(m.cache) })}</span><span>${t("livre {v}", { v: mb(m.free) })}</span></div>
+      <div class="sub">${t("swap {used} de {total}", { used: mb(m.swap_used), total: mb(m.swap_total) })}${s.wsl ? " · " + t("o WSL segura {v} (uso + cache)", { v: mb(m.held) }) : ""}</div></div>
+    ${!s.wsl ? "" : `<div class="panel"><h2>Windows</h2>${w ? `<div class="big">${mb(w.vmmem)}<small> VmmemWSL</small></div>
+      <div class="bar"><i style="width:${pct(w.total - w.free, w.total)}%;background:var(--vm)"></i></div>
+      <div class="sub">${t("Windows: {used} em uso de {total} · {free} livres", { used: mb(w.total - w.free), total: mb(w.total), free: mb(w.free) })}</div>` : `<div class="sub">${t("Sem acesso ao Windows daqui.")}</div>`}</div>`}
+    <div class="panel"><h2>${t("Discos")}</h2>${s.disks.map(d => `<div class="sub">${esc(d.label)}: ${t("{used} de {total} ({p}%)", { used: mb(d.used), total: mb(d.total), p: pct(d.used, d.total) })}</div>
+      <div class="bar"><i style="width:${pct(d.used, d.total)}%;background:${pct(d.used, d.total) > 90 ? "var(--bad)" : "var(--accent)"}"></i></div>`).join("")}</div>`;
+}
+
+function alerts(s) {
+  const out = [], m = s.mem, w = s.windows;
+  if (pct(m.used, m.total) >= 85) out.push(["bad", t("Memória do Linux em {p}% de uso.", { p: pct(m.used, m.total) })]);
+  if (m.swap_used > 256) out.push(["", t("O Linux está usando {v} de swap: fica lento. Feche sessões ou ligue a economia.", { v: mb(m.swap_used) })]);
+  if (w && w.free < 1536) out.push(["bad", t("O Windows tem só {v} livres.", { v: mb(w.free) })]);
+  s.disks.filter(d => pct(d.used, d.total) >= 90).forEach(d => out.push(["", t("{label} com {p}% ocupado.", { label: esc(d.label), p: pct(d.used, d.total) })]));
+  const lo = s.groups.find(g => g.kind === "leftover");
+  if (lo) out.push(["", pl(lo.count, "1 processo de teste esquecido usando {v}: veja \"Testes esquecidos\" abaixo.",
+    "{n} processos de teste esquecidos usando {v}: veja \"Testes esquecidos\" abaixo.", { v: mb(lo.rss) })]);
+  if (m.cache > 1536 && s.drop_cache) out.push(["", s.wsl ? t("{v} de cache de disco: \"Liberar cache\" devolve essa memória ao Windows.", { v: mb(m.cache) })
+    : t("{v} de cache de disco: \"Liberar cache\" devolve essa memória.", { v: mb(m.cache) })]);
+  $("#alerts").innerHTML = out.map(([cls, msg]) => `<div class="banner ${cls}">${msg}</div>`).join("");
+}
+
+function chart(el, series, max, fmt) {
+  const pts = snap.history, W = 600, H = 150, n = pts.length;
+  if (n < 2) { el.innerHTML = `<text x="8" y="20">${t("juntando dados…")}</text>`; return; }
+  const t0 = pts[0].t, t1 = pts[n - 1].t, x = (q) => (q - t0) / Math.max(1, t1 - t0) * (W - 40) + 36, y = (v) => H - 14 - (v / max) * (H - 24);
+  const grid = [0, .5, 1].map(f => `<line x1="36" x2="${W}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="currentColor" opacity=".12"/><text x="0" y="${y(max * f) + 3}">${fmt(max * f)}</text>`).join("");
+  const lines = series.map(([key, color]) => {
+    const p = pts.filter(q => q[key] != null).map(q => `${x(q.t).toFixed(1)},${y(q[key]).toFixed(1)}`);
+    return p.length > 1 ? `<polyline fill="none" stroke="${color}" stroke-width="2" points="${p.join(" ")}"/>` : "";
+  }).join("");
+  const when = (q) => new Date(q * 1000).toLocaleTimeString(LANG, { hour: "2-digit", minute: "2-digit" });
+  el.innerHTML = grid + lines + `<text x="36" y="${H - 1}">${when(t0)}</text><text x="${W - 34}" y="${H - 1}">${when(t1)}</text>`;
+}
+
+function groups(s) {
+  const total = s.mem.total;
+  const kinds = { session: "Claude", jarvis: "Jarvis", leftover: t("teste"), board: t("quadro"), mine: t("seus"), system: t("sistema") };
+  const rows = s.groups.map(g => {
+    const isOpen = open.has(g.key);
+    const action = g.kind === "session" && g.session
+      ? `<button class="danger" data-kill-session="${esc(g.session)}" data-label="${esc(g.label)}">${t("Encerrar sessão")}</button>` : "";
+    const head = `<tr class="grp" data-key="${esc(g.key)}"><td>${isOpen ? "▾" : "▸"}</td>
+      <td><span class="kind ${g.kind}">${kinds[g.kind]}</span>
+        ${esc(g.label)}${g.org ? ` <span class="sub">· ${esc(g.org)}</span>` : ""}${g.status ? ` <span class="sub">· ${esc(g.status === "working" ? t("trabalhando") : g.status === "waiting" ? t("esperando você") : g.status)}</span>` : ""}</td>
+      <td class="num">${mb(g.rss)}<span class="share" style="width:${Math.max(2, pct(g.rss, total) * 0.6)}px"></span></td><td class="num">${dec(g.cpu.toFixed(1))}%</td>
+      <td class="num">${g.count}</td><td>${action}</td></tr>`;
+    const procs = isOpen ? g.procs.map(p => `<tr class="proc"><td></td><td class="cmd" title="${esc(p.cmd)}">${p.pid} · ${esc(p.cmd || p.comm)}</td>
+      <td class="num">${mb(p.rss)}</td><td class="num">${dec(p.cpu.toFixed(1))}%</td><td></td>
+      <td>${p.can_kill ? `<button class="danger" data-kill-pid="${p.pid}" data-label="${esc(p.comm)}">${t("Encerrar")}</button>` : ""}</td></tr>`).join("")
+      + (g.count > g.procs.length ? `<tr class="proc"><td></td><td colspan="5">${pl(g.count - g.procs.length, "… e mais 1 processo menor", "… e mais {n} processos menores")}</td></tr>` : "") : "";
+    return head + procs;
+  }).join("");
+  $("#groups").innerHTML = `<tr><th></th><th>${t("Grupo")}</th><th style="text-align:right">RAM</th><th style="text-align:right">CPU</th><th style="text-align:right">${t("Proc.")}</th><th></th></tr>${rows}`;
+}
+
+function dockerTable(s) {
+  $("#docker").innerHTML = s.docker.length ? `<tr><th>Container</th><th>${t("Imagem")}</th><th>${t("Estado")}</th><th style="text-align:right">RAM</th><th style="text-align:right">CPU</th><th></th></tr>`
+    + s.docker.map(c => `<tr><td>${esc(c.name)}</td><td class="sub">${esc(c.image)}</td><td><span class="state ${esc(c.state)}">${esc(c.status)}</span></td>
+      <td class="num">${esc(c.mem || "—")}</td><td class="num">${esc(c.cpu || "—")}</td><td>${c.state === "running"
+        ? `<button data-docker="stop" data-id="${esc(c.id)}" data-label="${esc(c.name)}">${t("Parar")}</button> <button data-docker="restart" data-id="${esc(c.id)}" data-label="${esc(c.name)}">${t("Reiniciar")}</button>`
+        : `<button data-docker="start" data-id="${esc(c.id)}" data-label="${esc(c.name)}">${t("Iniciar")}</button>`}</td></tr>`).join("")
+    : `<tr><td class="msg">${t("Nenhum container (ou Docker fora do ar).")}</td></tr>`;
+}
+
+function render() {
+  const s = snap; if (!s || !s.mem) return;
+  $("#updated").textContent = t("atualizado {time} · a cada {n} s", { time: new Date(s.t * 1000).toLocaleTimeString(LANG), n: s.eco ? "30" : "5" });
+  $("#eco").setAttribute("aria-pressed", s.eco); $("#eco").textContent = s.eco ? t("Economia ligada") : t("Economia");
+  $("#drop").disabled = !s.drop_cache; if (!s.drop_cache) $("#drop").title = t("Falta a regra de sudo (tools/install-eco-sudo.sh)");
+  document.querySelectorAll(".wsl-only").forEach(e => { e.hidden = !s.wsl; });
+  panels(s); alerts(s); groups(s); dockerTable(s);
+  chart($("#ch-cpu"), [["cpu", "var(--used)"]], 100, v => `${Math.round(v)}%`);
+  const mx = Math.max(s.mem.total, ...snap.history.map(h => h.vmmem || 0));
+  chart($("#ch-mem"), [["used", "var(--used)"], ["cache", "var(--cache)"], ...(s.wsl ? [["vmmem", "var(--vm)"]] : [])], mx, v => mb(v));
+}
+
+async function tick() {
+  try { snap = await api("/api/resources"); render(); }
+  catch (e) { $("#updated").textContent = t("sem resposta do quadro ({error})", { error: e.message }); }
+  setTimeout(tick, snap?.eco ? 30000 : 5000);
+}
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button"), row = e.target.closest("tr.grp");
+  if (!b && row) { const k = row.dataset.key; open.has(k) ? open.delete(k) : open.add(k); return render(); }
+  if (!b) return;
+  const d = b.dataset, run = async (fn, ok) => { b.disabled = true; try { say(await fn() || ok); } catch (err) { say(err.message); } finally { b.disabled = false; snap = await api("/api/resources").catch(() => snap); render(); } };
+  if (d.killPid && confirm(t("Encerrar o processo {pid} ({label})?", { pid: d.killPid, label: d.label })))
+    return run(async () => { const r = await api("/api/resources/kill", { pid: +d.killPid }); return t("Processo {pid} encerrado ({how}).", { pid: d.killPid, how: r.how }); });
+  if (d.killSession && confirm(t("Encerrar a sessão do Claude \"{label}\"? A conversa fica salva e dá para retomar pelo quadro.", { label: d.label })))
+    return run(async () => { await api("/api/kill", { id: d.killSession }); return t("Sessão encerrada."); });
+  if (d.docker && confirm(t({ stop: "Parar o container {label}?", start: "Iniciar o container {label}?", restart: "Reiniciar o container {label}?" }[d.docker], { label: d.label })))
+    return run(async () => { await api("/api/resources/docker", { id: d.id, action: d.docker }); return t("Container {label}: {action} ok.", { label: d.label, action: d.docker }); });
+  if (b.id === "drop")
+    return run(async () => { const r = await api("/api/resources/dropcache", {}); return t("Cache liberado: o WSL foi de {before} para {after}.", { before: mb(r.before), after: mb(r.after) }); });
+  if (b.id === "eco") {
+    const on = !snap?.eco;
+    if (on) {
+      const p = await api("/api/eco/plan").catch(() => null);
+      if (!confirm((p?.sessions != null ? pl(p.sessions, "Ligar a economia? Fecha 1 sessão do quadro (volta ao desligar)", "Ligar a economia? Fecha {n} sessões do quadro (voltam ao desligar)")
+        : t("Ligar a economia? Fecha as sessões do quadro (voltam ao desligar)"))
+        + (p?.containers?.length ? pl(p.containers.length, ", para 1 container", ", para {n} containers") : "")
+        + (p?.drop_cache ? t(" e libera o cache de disco.") : "."))) return;
+    }
+    return run(async () => { const r = await api("/api/eco", { on }); return r.eco ? t("Economia ligada: WSL de {before} para {after}.", { before: mb(r.held_before), after: mb(r.held_after) })
+      : pl(r.sessions.length, "Economia desligada: 1 sessão retomada.", "Economia desligada: {n} sessões retomadas."); });
+  }
+});
+// ---------- limpeza de disco ----------
+let clean = null;
+async function loadClean(refresh) {
+  try { clean = refresh ? await api("/api/resources/cleanup", { refresh: true }) : await api("/api/resources/cleanup"); }
+  catch (e) { $("#scan-msg").textContent = e.message; return; }
+  renderClean();
+  if (clean.busy) setTimeout(() => loadClean(false), 3000);
+}
+function renderClean() {
+  const c = clean || {}, items = c.items || [];
+  $("#scan").textContent = c.t ? t("Analisar de novo") : t("Analisar");
+  $("#scan").disabled = !!c.busy;
+  const sug = items.filter(i => i.suggest && !i.block && i.mb).reduce((n, i) => n + i.mb, 0);
+  $("#scan-msg").textContent = c.busy ? t("analisando… (medir os worktrees pode levar 1 ou 2 minutos)")
+    : c.t ? t("análise de {time} · sugerido: {v} (fora as imagens Docker, medidas à parte)", { time: new Date(c.t * 1000).toLocaleTimeString(LANG), v: mb(sug) })
+    : t("Clique em Analisar para medir o que dá para liberar.");
+  const v = c.vhdx;
+  $("#vhdx").innerHTML = v ? `<p class="msg">${t("O disco do Linux é um arquivo de <b>{size}</b> no C: (<code>{path}</code>)", { size: mb(v.mb), path: esc(v.path) })}${v.sparse
+    ? t(", em modo esparso: o espaço liberado aqui volta ao C: sozinho.")
+    : t(", que <b>não encolhe sozinho</b>: a limpeza libera espaço no Linux, mas o C: só recupera depois de passar o disco para o modo esparso. Uma vez, no PowerShell e com tudo do Linux fechado: <code>wsl --shutdown</code> e depois <code>wsl --manage {distro} --set-sparse true</code>.", { distro: esc(c.distro || "<distro>") })}</p>` : "";
+  $("#clean").innerHTML = items.length ? `<tr><th>${t("O quê")}</th><th>${t("Detalhe")}</th><th style="text-align:right">${t("Tamanho")}</th><th></th></tr>` + items.map(i =>
+    `<tr class="${i.suggest && !i.block ? "suggest" : ""}"><td>${esc(i.label)}</td>
+      <td><span class="sub">${esc(i.detail)}${i.age != null ? " · " + pl(i.age, "último commit há 1 dia", "último commit há {n} dias") : ""}</span>${(i.why || []).map(w => `<span class="why">${esc(w)}</span>`).join("")}
+        ${i.block ? `<span class="blocked">${esc(i.block)}</span>` : ""}</td>
+      <td class="num">${i.mb == null ? "—" : mb(i.mb)}</td>
+      <td>${i.block ? "" : `<button class="danger" data-clean="${esc(i.kind)}" data-id="${esc(i.id)}" data-label="${esc(i.label)}">${i.kind === "worktree" ? t("Remover") : t("Limpar")}</button>`}</td></tr>`).join("")
+    : c.t ? `<tr><td class="msg">${t("Nada para limpar.")}</td></tr>` : "";
+}
+$("#scan").onclick = () => loadClean(true);
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-clean]"); if (!b) return;
+  const d = b.dataset, warn = { worktree: "O worktree sai do disco (a branch continua no git; só sai se não tiver alteração não salva).",
+    cache: "Os pacotes baixam de novo quando precisar.", scratch: "Só pastas de sessões que já não estão rodando.",
+    "docker-images": "Imagens sem nenhum container usando: baixam ou são construídas de novo quando precisar.", "docker-build": "" }[d.clean];
+  if (!confirm(t("Limpar \"{label}\"? {warn}", { label: d.label, warn: warn ? t(warn) : "" }))) return;
+  b.disabled = true; say(t("limpando…"));
+  try { const r = await api("/api/resources/cleanup", { kind: d.clean, id: d.id }); say(t("Pronto: o Linux ganhou {v} livres.", { v: mb(r.freed_mb) })); }
+  catch (err) { say(err.message); b.disabled = false; }
+  loadClean(false);
+});
+loadClean(false);
+tick();
+</script>
+</body>
+</html>
