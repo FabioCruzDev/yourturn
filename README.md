@@ -52,29 +52,28 @@ Clone your repos there, or point `KANBAN_REPOS_ROOT` at the folder that holds th
 
 ## Connect your tools
 
-**Quick (single account):** put a Linear personal API key in `~/.config/kanban-claude/linear_key` (or export
-`LINEAR_API_KEY`). Your assigned issues show up as cards. Local tasks (“+ New task”) work with no tool at all.
+The first time you open the board, a short setup wizard asks for:
 
-**Organizations (recommended when you have more than one account):** in the board, open the organization selector →
-“+ New organization…” and fill in:
+1. **Projects:** the folder with your repositories (it shows how many it found) and a name for the workspace.
+2. **Tasks:** Linear, Jira (Cloud or Data Center) or board-only tasks. Paste the key and click **Test** to see how many
+   issues are assigned to you before saving.
+3. **Code:** GitHub (it detects whether `gh` is logged in and offers a login button) or Bitbucket.
+4. **Extras:** commit e-mail and Slack token (optional), plus a summary of what will change on your machine.
 
-| Field | What it does |
-| --- | --- |
-| Id, name, color, project folders | sessions started under those folders belong to this organization |
-| Linear key / Jira URL + token | issues assigned to you become cards (read-only) |
-| GitHub org or Bitbucket | PR badges on cards; “Log in to GitHub” / “Set up Bitbucket” open a terminal for login |
-| Commit e-mail | `git` identity used inside the organization's folders |
-| Slack user token (`xoxp-…`) | DMs and mentions in the side panel (see the form for the app scopes) |
+If Claude Code is already logged in on the machine, the workspace reuses that login (`~/.claude` and `gh`), so nothing
+new to sign in. You can skip the wizard (“Set up later”) and reopen it from the banner.
 
-Then click “Log in to Claude” for that organization (it gets its own `CLAUDE_CONFIG_DIR`, `~/.claude-<id>`).
-Sessions in folders that belong to no organization keep using your normal `~/.claude` login.
+**More than one account** (e.g. two employers and personal)? Add another organization from the selector →
+“+ New organization…”. Each extra organization gets its own `CLAUDE_CONFIG_DIR` (`~/.claude-<id>`, “Log in to Claude”
+opens a terminal for it), GitHub login, commit e-mail and Linear/Jira/Slack credentials. Sessions started under an
+organization's folders use its accounts.
+
 Credentials are stored in `~/.config/claude-orgs/<id>/` with mode 600 and never leave your machine.
 
-> **What creating an organization changes outside the board:** it creates `~/.claude-<id>` (generic settings, hooks,
-> commands and plugins are linked from `~/.claude`), adds a managed block to `~/.bashrc` so that `claude` and `gh`
-> pick the organization by folder, and adds `includeIf "gitdir:<folder>/"` entries to `~/.gitconfig` for the commit
-> e-mail and GitHub credential. `tools/claude_orgs.py` (`verify`, `sync`, `add`, `env`) manages the same files from the
-> command line; `apply`/`undo` split an existing `~/.claude` into organizations (with a full backup first).
+> **What setting up changes outside the board:** a managed block in `~/.bashrc` so that `claude` and `gh` pick the
+> organization by folder, `includeIf "gitdir:<folder>/"` entries in `~/.gitconfig` when you set a commit e-mail, and,
+> for extra organizations, `~/.claude-<id>` (generic settings, hooks, commands and plugins are linked from `~/.claude`).
+> `tools/claude_orgs.py` (`verify`, `sync`, `add`, `env`) manages the same files from the command line.
 
 ## Security
 

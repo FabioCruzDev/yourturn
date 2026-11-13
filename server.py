@@ -96,6 +96,8 @@ def tracker_issues(max_age=60):
             srcs.append((org, name, "Linear", lambda k=linear_key(org): linear_fetch(k)))
         if org and jira_conf(org):
             srcs.append((org, name, "Jira", lambda c=jira_conf(org): jira_fetch(c)))
+    if not srcs and orgs():
+        return [], None  # organizações só com tarefas do quadro: escolha válida, não é erro
     if not srcs:
         where = ORGS_FILE.parent / (active_org() if orgs() else "")
         return None, tr("Nenhuma organização com Linear ou Jira. Linear: crie a chave em Linear → Settings → Security & access → "
@@ -449,6 +451,8 @@ def org_vars(config):
         env = json.loads((Path(config) / "settings.json").read_text()).get("env") or {}
     except (OSError, ValueError):
         env = {}
+    if Path(config) == PROJECTS.parent:  # organização no ~/.claude de sempre: CLAUDE_CONFIG_DIR explícito faria o
+        return {k: str(v) for k, v in env.items()}  # Claude ler ~/.claude/.claude.json (perde confiança, MCP, onboarding)
     return {**{k: str(v) for k, v in env.items()}, "CLAUDE_CONFIG_DIR": str(config)}
 
 
@@ -757,19 +761,79 @@ def org_create(body):
             raise ValueError(tr("A organização {org} já existe e nada mudou (Linear, Jira e onde fica o código são o que dá para atualizar)", org=org))
         _linear_cache.clear()
         return {"orgs": org_list(), "updated": changed}
-    co.add(org, [p for p in paths if p.strip()],
+    co.add(org, [p for p in paths if p.strip()], use_default_claude=bool(body.get("use_default_claude")),
            **{k: str(body.get(k) or "") for k in ("name", "color", "github_org", "email") + tools})
     return {"orgs": org_list()}
 
 
+# ---------- assistente de configuração (1ª execução, sem nenhuma organização) ----------
+
+def gh_user(env=None):
+    """Conta do GitHub logada no `gh` (vazio se não houver gh ou login)."""
+    try:
+        r = subprocess.run(["gh", "api", "user", "--jq", ".login"], capture_output=True, text=True, timeout=15, env=env)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def setup_info(body):
+    """O que o assistente precisa saber da máquina: se o Claude de sempre tem login, quem está no gh, a pasta padrão."""
+    return {"claude_login": base_logged(), "gh_user": gh_user(claude_env()), "repos_root": str(REPOS_ROOT).replace(str(Path.home()), "~", 1),
+            "home": str(Path.home())}
+
+
+def setup_scan(body):
+    """Quantos repositórios git há logo abaixo da pasta (o que o quadro vai oferecer para iniciar sessões)."""
+    raw = str(body.get("path", "")).strip()
+    p = Path(raw).expanduser()
+    if not raw or not p.is_dir():
+        return {"exists": False, "repos": 0}
+    try:
+        n = sum(1 for x in p.iterdir() if (x / ".git").exists())
+    except OSError:
+        n = 0
+    return {"exists": True, "repos": n, "is_repo": (p / ".git").exists()}
+
+
+def setup_test(body):
+    """Testa uma credencial antes de salvar: {"kind": "linear"|"jira"|"slack"|"github", ...} → {"ok", "detail"}."""
+    kind = body.get("kind")
+    if kind == "linear":
+        issues, err = linear_fetch(str(body.get("key", "")).strip())
+        return {"ok": False, "detail": err} if err else {"ok": True, "detail": tr("{n} issues atribuídas a você", n=len(issues))}
+    if kind == "jira":
+        c = {k: str(body.get(k, "")).strip() for k in ("url", "email", "token", "jql")}
+        if not c["url"] or not c["token"]:
+            return {"ok": False, "detail": tr("Informe o endereço e o token do Jira")}
+        issues, err = jira_fetch(c)
+        return {"ok": False, "detail": err} if err else {"ok": True, "detail": tr("{n} issues atribuídas a você", n=len(issues))}
+    if kind == "slack":
+        tok = str(body.get("token", "")).strip()
+        if not tok.startswith("xoxp-"):
+            return {"ok": False, "detail": tr("Use o User OAuth Token do app do Slack (começa com xoxp-)")}
+        try:
+            d = slack_call("auth.test", tok)
+        except Exception as e:  # noqa: BLE001  (token inválido, sem rede)
+            return {"ok": False, "detail": str(e)}
+        return {"ok": True, "detail": tr("conectado como {user} em {team}", user=d.get("user", ""), team=d.get("team", ""))}
+    if kind == "github":
+        u = gh_user(claude_env())
+        return {"ok": bool(u), "detail": tr("logado como {user}", user=u) if u else tr("o gh não está logado")}
+    raise ValueError(tr("Teste desconhecido"))
+
+
 def org_gh_login(body):
     """Terminal com o `gh auth login` da organização (GH_CONFIG_DIR dela); fica aberto no fim para você ver o resultado."""
-    o = next((o for o in org_list() if o["id"] == body.get("org")), None)
-    if not o:
-        raise ValueError(tr("Organização desconhecida"))
-    config = next(d for oid, d, _ in orgs() if oid == o["id"])
-    if not org_vars(config).get("GH_CONFIG_DIR"):
-        raise ValueError(tr("A organização {name} não tem GitHub próprio (GH_CONFIG_DIR)", name=o["name"]))
+    if body.get("default"):  # assistente de configuração: o gh de sempre (~/.config/gh), antes de existir organização
+        o, config = {"id": "default", "name": "GitHub", "paths": []}, None
+    else:
+        o = next((o for o in org_list() if o["id"] == body.get("org")), None)
+        if not o:
+            raise ValueError(tr("Organização desconhecida"))
+        config = next(d for oid, d, _ in orgs() if oid == o["id"])
+        if not org_vars(config).get("GH_CONFIG_DIR") and config != PROJECTS.parent:
+            raise ValueError(tr("A organização {name} não tem GitHub próprio (GH_CONFIG_DIR)", name=o["name"]))
     sid = str(uuid.uuid4())
     window = f"github-{o['id']}-{sid[:4]}"
     script = f'gh auth login -h github.com -p https -w; echo; gh auth status; read -rp {shlex.quote(tr("Enter para fechar "))}'
@@ -2537,6 +2601,7 @@ class Handler(BaseHTTPRequestHandler):
         actions = {"/api/launch": launch, "/api/resume": resume, "/api/send": send, "/api/link": link, "/api/kill": kill, "/api/card": card_update, "/api/settings": settings_update, "/api/summary": summary,
                    "/api/push/subscribe": push_subscribe, "/api/push/unsubscribe": push_unsubscribe, "/api/push/test": push_test,
                    "/api/task/create": task_create, "/api/task/update": task_update, "/api/org/create": org_create,
+                   "/api/setup/info": setup_info, "/api/setup/scan": setup_scan, "/api/setup/test": setup_test,
                    "/api/org/login": org_login, "/api/org/gh-login": org_gh_login, "/api/org/bitbucket": org_bitbucket,
                    "/api/eco": eco, "/api/slack/read": slack_read, "/api/slack/reply": slack_reply,
                    "/api/slack/hide": slack_hide, "/api/terminal": open_terminal, "/api/resources/kill": res_action("kill"),

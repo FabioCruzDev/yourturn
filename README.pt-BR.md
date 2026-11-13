@@ -54,29 +54,28 @@ Clone seus repositórios ali, ou aponte `KANBAN_REPOS_ROOT` para a pasta onde el
 
 ## Conectar suas ferramentas
 
-**Rápido (uma conta só):** ponha uma chave pessoal de API do Linear em `~/.config/kanban-claude/linear_key` (ou exporte
-`LINEAR_API_KEY`). As issues atribuídas a você viram cards. Tarefas locais (“+ Nova tarefa”) funcionam sem ferramenta
-nenhuma.
+Na primeira vez que o quadro abre, um assistente curto pede:
 
-**Organizações (recomendado com mais de uma conta):** no quadro, abra o seletor de organização → “+ Nova organização…”:
+1. **Projetos:** a pasta com seus repositórios (mostra quantos encontrou) e um nome para o espaço de trabalho.
+2. **Tarefas:** Linear, Jira (Cloud ou Data Center) ou só tarefas do quadro. Cole a chave e clique em **Testar** para
+   ver quantas issues estão com você antes de salvar.
+3. **Código:** GitHub (detecta se o `gh` está logado e oferece o botão de login) ou Bitbucket.
+4. **Extras:** e-mail dos commits e token do Slack (opcionais), e um resumo do que vai mudar na sua máquina.
 
-| Campo | O que faz |
-| --- | --- |
-| Identificador, nome, cor, pastas de projeto | sessões iniciadas nessas pastas pertencem à organização |
-| Chave do Linear / URL + token do Jira | issues atribuídas a você viram cards (só leitura) |
-| Org do GitHub ou Bitbucket | selos de PR nos cards; “Entrar no GitHub” / “Configurar Bitbucket” abrem um terminal para o login |
-| E-mail de commit | identidade do `git` dentro das pastas da organização |
-| Token de usuário do Slack (`xoxp-…`) | DMs e menções na lateral (os escopos do app estão no formulário) |
+Se o Claude Code já está logado na máquina, o espaço usa esse login (`~/.claude` e `gh`), sem entrar de novo em nada.
+Dá para pular o assistente (“Configurar depois”) e reabrir pelo aviso no topo.
 
-Depois clique em “Entrar no Claude” para a organização (ela ganha o próprio `CLAUDE_CONFIG_DIR`, `~/.claude-<id>`).
-Sessões em pastas que não são de nenhuma organização continuam usando o login normal do `~/.claude`.
+**Mais de uma conta** (ex.: dois empregos e o pessoal)? Crie outra organização pelo seletor → “+ Nova organização…”.
+Cada organização extra tem `CLAUDE_CONFIG_DIR` próprio (`~/.claude-<id>`; “Entrar no Claude” abre um terminal para o
+login), login do GitHub, e-mail de commit e credenciais de Linear/Jira/Slack. Sessões iniciadas nas pastas de uma
+organização usam as contas dela.
+
 As credenciais ficam em `~/.config/claude-orgs/<id>/` com permissão 600 e não saem da sua máquina.
 
-> **O que criar uma organização muda fora do quadro:** cria `~/.claude-<id>` (configurações genéricas, hooks, commands e
-> plugins entram por link a partir do `~/.claude`), acrescenta um bloco gerenciado no `~/.bashrc` para o `claude` e o
-> `gh` escolherem a organização pela pasta, e acrescenta `includeIf "gitdir:<pasta>/"` no `~/.gitconfig` para o e-mail de
-> commit e a credencial do GitHub. O `tools/claude_orgs.py` (`verify`, `sync`, `add`, `env`) faz o mesmo pela linha de
-> comando; `apply`/`undo` dividem um `~/.claude` existente em organizações (com backup completo antes).
+> **O que a configuração muda fora do quadro:** um bloco gerenciado no `~/.bashrc` para o `claude` e o `gh` escolherem a
+> organização pela pasta, `includeIf "gitdir:<pasta>/"` no `~/.gitconfig` quando você informa o e-mail de commit e, nas
+> organizações extras, `~/.claude-<id>` (configurações genéricas, hooks, commands e plugins entram por link a partir do
+> `~/.claude`). O `tools/claude_orgs.py` (`verify`, `sync`, `add`, `env`) faz o mesmo pela linha de comando.
 
 ## Segurança
 

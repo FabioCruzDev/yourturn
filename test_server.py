@@ -181,7 +181,7 @@ assert _iss == [{"identifier": "ACM-1", "org": "acme", "source": "linear"}] and 
 (_o / "pessoal" / "linear_key").unlink(); server._linear_cache.clear()
 assert server.tracker_issues() == ([{"identifier": "ACM-1", "org": "acme", "source": "linear"}], None)
 (_o / "acme" / "linear_key").unlink(); server._linear_cache.clear()
-assert server.tracker_issues()[0] is None and "Nenhuma organização com Linear ou Jira" in server.tracker_issues()[1]
+assert server.tracker_issues() == ([], None)  # organizações só com tarefas do quadro: sem erro
 server.linear_fetch = _fetch
 # Jira: mesmo formato das issues do Linear; Cloud = e-mail + token (Basic, /rest/api/3/search/jql), Data Center = token
 # pessoal (Bearer, /rest/api/2/search); subtarefa fica fora; categoria do status vira o estado

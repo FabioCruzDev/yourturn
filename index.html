@@ -295,6 +295,38 @@ select.org-pick option{color:var(--fg);background:var(--card)}
 #org-sel{width:auto;border-color:var(--oc,currentColor)}
 #orgform input:not([type=color]){width:min(28em,100%);box-sizing:border-box}
 #orgform [data-tracker]:not([hidden]),#orgform [data-host]:not([hidden]){display:flex;flex-direction:column;gap:8px}
+/* ---------- assistente de configuração (1ª execução) ---------- */
+.su-veil{position:fixed;inset:0;z-index:60;background:rgb(3 8 20 / .62);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow:auto}
+.su-veil[hidden]{display:none}
+.setup{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:12px;width:min(640px,100%);padding:22px 24px;display:flex;flex-direction:column;gap:14px;box-shadow:0 24px 60px -20px rgb(0 0 0 / .6)}
+.setup h2{margin:0;font-size:1.25rem}
+.setup .su-lead{margin:0;color:var(--muted)}
+.su-steps{display:flex;gap:6px;list-style:none;margin:0;padding:0;flex-wrap:wrap}
+.su-steps li{flex:1;min-width:6em;font-size:.78rem;color:var(--muted);border-top:3px solid var(--line);padding-top:6px}
+.su-steps li.on{color:var(--fg);border-color:var(--accent)}
+.su-steps li.done{border-color:var(--ok)}
+.setup section{display:flex;flex-direction:column;gap:8px}
+.setup section[hidden],.setup [data-su][hidden]{display:none}
+.setup label{font-size:.85rem;font-weight:600}
+.setup input:not([type=checkbox]):not([type=radio]){width:100%;box-sizing:border-box;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:.88rem}
+.setup input:focus{outline:none;border-color:var(--accent)}
+.setup .hint{font-size:.8rem;color:var(--muted);margin:0}
+.setup .hint a{color:var(--accent)}
+.su-choice{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.su-choice label{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;font-weight:600}
+.su-choice label small{font-weight:400;color:var(--muted);font-size:.78rem}
+.su-choice input{position:absolute;opacity:0;pointer-events:none}
+.su-choice label:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.su-row{display:flex;flex-direction:row;gap:8px;align-items:center;flex-wrap:wrap}
+.su-row input{flex:1;min-width:12em}
+.su-res{font-size:.82rem}
+.su-res.ok{color:var(--ok)}
+.su-res.bad{color:var(--bad)}
+.su-chk{display:flex;flex-direction:row;gap:8px;align-items:flex-start;font-weight:400!important}
+.su-chk input{margin-top:3px}
+.su-sum{margin:0;padding-left:1.2em;font-size:.85rem;display:flex;flex-direction:column;gap:4px}
+.setup .acts{display:flex;flex-direction:row;gap:8px;align-items:center;flex-wrap:wrap}
+.setup .acts .grow{flex:1}
 .card .sess{border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
 /* Animações: card novo entra deslizando; Claude trabalhando pulsa azul; aguardando você pulsa vermelho */
 .card.new{animation:cardIn .45s cubic-bezier(.2,.8,.2,1) both}
@@ -659,6 +691,80 @@ select.org-pick option{color:var(--fg);background:var(--card)}
   <div class="acts"><button class="primary" type="submit">Criar</button><button type="button" id="of-close">Fechar</button>
     <span class="msg" id="of-out"></span></div>
 </form>
+<div class="su-veil" id="setup" hidden>
+<form class="setup" id="setup-form" autocomplete="off" role="dialog" aria-modal="true" aria-labelledby="su-title" novalidate>
+  <h2 id="su-title">Bem-vindo ao YourTurn</h2>
+  <p class="su-lead">Vamos ligar o quadro às suas ferramentas. Leva um minuto e dá para mudar depois.</p>
+  <ol class="su-steps"><li data-s="1">Projetos</li><li data-s="2">Tarefas</li><li data-s="3">Código</li><li data-s="4">Extras</li></ol>
+  <section data-step="1">
+    <label for="su-path">Pasta dos seus repositórios</label>
+    <input id="su-path" placeholder="~/Projects">
+    <p class="hint">As sessões do Claude abrem nos repositórios git logo abaixo desta pasta.</p>
+    <span class="su-res" id="su-path-out"></span>
+    <label for="su-name">Nome deste espaço de trabalho</label>
+    <input id="su-name" placeholder="Pessoal">
+    <p class="hint">Se um dia você tiver outra conta (outro emprego, por exemplo), cria outro espaço ao lado deste.</p>
+    <label class="su-chk" id="su-claude-row"><input type="checkbox" id="su-claude" checked> <span>Usar o login do Claude que já está nesta máquina</span></label>
+    <p class="hint" id="su-claude-out"></p>
+  </section>
+  <section data-step="2" hidden>
+    <label>De onde vêm as suas tarefas?</label>
+    <div class="su-choice">
+      <label><input type="radio" name="su-tracker" value="linear" checked>Linear<small>issues atribuídas a você</small></label>
+      <label><input type="radio" name="su-tracker" value="jira">Jira<small>Cloud ou Data Center</small></label>
+      <label><input type="radio" name="su-tracker" value="">Só o quadro<small>tarefas criadas aqui</small></label>
+    </div>
+    <div data-su="linear">
+      <label for="su-linear">Chave pessoal de API do Linear</label>
+      <div class="su-row"><input type="password" id="su-linear" placeholder="lin_api_…"><button type="button" data-su-test="linear">Testar</button></div>
+      <p class="hint">No Linear: Settings → Security &amp; access → Personal API keys → New key.</p>
+      <span class="su-res" data-su-out="linear"></span>
+    </div>
+    <div data-su="jira" hidden>
+      <label for="su-jira-url">Endereço do Jira</label><input id="su-jira-url" type="url" placeholder="https://suaempresa.atlassian.net">
+      <label for="su-jira-email">E-mail da conta (Jira Cloud; deixe vazio no Jira Server/Data Center)</label><input id="su-jira-email" type="email">
+      <label for="su-jira-token">Token de API</label>
+      <div class="su-row"><input id="su-jira-token" type="password"><button type="button" data-su-test="jira">Testar</button></div>
+      <p class="hint">Jira Cloud: id.atlassian.com → Segurança → Tokens de API. Server/Data Center: token pessoal no seu perfil.</p>
+      <span class="su-res" data-su-out="jira"></span>
+    </div>
+    <p class="hint" data-su="">Sem Linear nem Jira, você cria as tarefas no próprio quadro (“+ Nova tarefa”).</p>
+  </section>
+  <section data-step="3" hidden>
+    <label>Onde fica o seu código?</label>
+    <div class="su-choice">
+      <label><input type="radio" name="su-host" value="github" checked>GitHub<small>selos de PR nos cards</small></label>
+      <label><input type="radio" name="su-host" value="bitbucket">Bitbucket<small>acesso por chave SSH</small></label>
+    </div>
+    <div data-su="github">
+      <div class="su-row"><span class="su-res" data-su-out="github"></span><button type="button" data-su-test="github">Verificar de novo</button><button type="button" id="su-gh-login">Entrar no GitHub</button></div>
+      <label for="su-gh-org">Org do GitHub (opcional)</label><input id="su-gh-org" placeholder="minha-empresa">
+    </div>
+    <div data-su="bitbucket" hidden>
+      <label for="su-bb-email">E-mail da conta Atlassian (opcional)</label><input id="su-bb-email" type="email">
+      <label for="su-bb-token">Token de API do Bitbucket (opcional; para ver os PRs nos cards)</label><input id="su-bb-token" type="password">
+      <p class="hint">A chave SSH para clonar e dar push é criada depois, pelo botão “Configurar Bitbucket”.</p>
+    </div>
+  </section>
+  <section data-step="4" hidden>
+    <label for="su-email">E-mail dos commits (opcional)</label><input id="su-email" type="email" placeholder="voce@exemplo.com">
+    <p class="hint">Vale só nas pastas deste espaço. Sem ele, fica o do seu ~/.gitconfig.</p>
+    <label for="su-slack">Token do Slack (opcional)</label>
+    <div class="su-row"><input id="su-slack" type="password" placeholder="xoxp-…"><button type="button" data-su-test="slack">Testar</button></div>
+    <p class="hint">DMs e menções numa lateral do quadro. Precisa de um app do Slack seu, com User OAuth Token (veja o README).</p>
+    <span class="su-res" data-su-out="slack"></span>
+    <label>O que vai mudar na sua máquina</label>
+    <ul class="su-sum" id="su-sum"></ul>
+  </section>
+  <div class="acts">
+    <button type="button" id="su-skip">Configurar depois</button><span class="grow"></span>
+    <button type="button" id="su-back">Voltar</button>
+    <button type="button" class="primary" id="su-next">Avançar</button>
+    <button type="submit" class="primary" id="su-done" hidden>Concluir configuração</button>
+  </div>
+  <span class="msg" id="su-out"></span>
+</form>
+</div>
 <aside class="slackside" id="slackside" hidden aria-label="Slack">
   <section class="lane" data-lane="slack"><h2 title="DMs e menções a você nos últimos 2 dias"><span class="dot"></span>Slack<span class="n" id="ss-n"></span>
     <button type="button" id="ss-replied" hidden title="Mostrar ou esconder as conversas em que você respondeu por último"></button>
@@ -828,7 +934,9 @@ async function setOrg(id) {
 }
 $("#org-sel").onchange = (e) => {
   if (e.target.value !== "__new") return setOrg(e.target.value);
-  renderOrgSel(); $("#orgform").hidden = false; $("#of-id").focus();
+  renderOrgSel();
+  if (!(st.orgs || []).length) return openSetup(); // a primeira organização é pelo assistente
+  $("#orgform").hidden = false; $("#of-id").focus();
 };
 // Sessão do Claude na organização: sem login, o próprio Claude pede o login no terminal
 async function orgLogin(org) {
@@ -874,6 +982,109 @@ $("#orgform").onsubmit = async (e) => {
         : `<button type="button" class="primary" data-gh-login="${esc(id)}">${t("Entrar no GitHub")}</button>`}`;
     tick();
   } catch (err) { out.textContent = err.message; }
+};
+
+// ---------- assistente de configuração: abre sozinho quando não há nenhuma organização ----------
+const su = { step: 1, info: null, tested: {} };
+const suRadio = (name) => document.querySelector(`input[name=${name}]:checked`)?.value ?? "";
+const suSlug = (name) => (name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").replace(/^[^a-z]+/, "").slice(0, 30)) || "main";
+function suRes(kind, ok, text) {
+  const el = document.querySelector(`[data-su-out="${kind}"]`); if (!el) return;
+  el.className = "su-res" + (ok === true ? " ok" : ok === false ? " bad" : ""); el.textContent = text || "";
+}
+function suToggle() {
+  const tr = suRadio("su-tracker"), host = suRadio("su-host");
+  document.querySelectorAll("#setup [data-su]").forEach(d => {
+    const k = d.dataset.su;
+    if (k === "linear" || k === "jira" || k === "") d.hidden = k !== tr;
+    else d.hidden = k !== host;
+  });
+}
+function suGo(n) {
+  su.step = n;
+  document.querySelectorAll("#setup section[data-step]").forEach(sec => { sec.hidden = Number(sec.dataset.step) !== n; });
+  document.querySelectorAll("#setup .su-steps li").forEach(li => { const k = Number(li.dataset.s); li.className = k === n ? "on" : k < n ? "done" : ""; });
+  $("#su-back").hidden = n === 1; $("#su-next").hidden = n === 4; $("#su-done").hidden = n !== 4; $("#su-out").textContent = "";
+  if (n === 3 && !su.tested.github) suTest("github");
+  if (n === 4) suSummary();
+  document.querySelector(`#setup section[data-step="${n}"] input:not([type=radio])`)?.focus();
+}
+async function suTest(kind) {
+  const v = (id) => $(id).value.trim();
+  const body = { kind, key: v("#su-linear"), url: v("#su-jira-url"), email: v("#su-jira-email"), token: kind === "slack" ? v("#su-slack") : v("#su-jira-token") };
+  if ((kind === "linear" && !body.key) || (kind === "slack" && !body.token)) return suRes(kind, null, "");
+  suRes(kind, null, t("testando…"));
+  try { const r = await api("/api/setup/test", body); su.tested[kind] = r.ok; suRes(kind, r.ok, (r.ok ? "✓ " : "✗ ") + r.detail); }
+  catch (e) { suRes(kind, false, "✗ " + e.message); }
+}
+async function suScan() {
+  const path = $("#su-path").value.trim() || $("#su-path").placeholder;
+  try {
+    const r = await api("/api/setup/scan", { path });
+    const out = $("#su-path-out");
+    out.className = "su-res" + (r.exists ? (r.repos ? " ok" : "") : " bad");
+    out.textContent = !r.exists ? t("Essa pasta não existe (ela será criada).") : r.repos ? t(r.repos === 1 ? "✓ 1 repositório git encontrado" : "✓ {n} repositórios git encontrados", { n: r.repos })
+      : r.is_repo ? t("Essa pasta já é um repositório: escolha a pasta que contém os repositórios.") : t("Nenhum repositório git ainda: clone seus projetos aqui depois.");
+  } catch { /* servidor ocupado: tenta de novo ao digitar */ }
+}
+function suSummary() {
+  const name = $("#su-name").value.trim() || $("#su-name").placeholder, id = suSlug(name), path = $("#su-path").value.trim() || $("#su-path").placeholder;
+  const items = [t("Cria o espaço “{name}” para a pasta {path} (fica em ~/.config/claude-orgs/{id}/, com as chaves em arquivos que só você lê).", { name: esc(name), path: esc(path), id: esc(id) }),
+    $("#su-claude").checked && su.info?.claude_login ? t("Usa o login do Claude e do gh que já existem nesta máquina.") : t("Cria ~/.claude-{id} para um login separado do Claude (você entra no fim).", { id: esc(id) }),
+    t("Acrescenta um bloco no ~/.bashrc para o <code>claude</code> e o <code>gh</code> escolherem o espaço pela pasta."),
+    $("#su-email").value.trim() && t("Acrescenta no ~/.gitconfig o e-mail dos commits para as pastas deste espaço.")];
+  $("#su-sum").innerHTML = items.filter(Boolean).map(x => `<li>${x}</li>`).join("");
+}
+let suScanTimer;
+$("#su-path").addEventListener("input", () => { clearTimeout(suScanTimer); suScanTimer = setTimeout(suScan, 400); });
+["#su-email", "#su-name", "#su-path", "#su-claude"].forEach(id => $(id).addEventListener("input", () => { if (su.step === 4) suSummary(); }));
+document.querySelectorAll("#setup input[type=radio]").forEach(r => { r.onchange = suToggle; });
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-su-test]"); if (b) suTest(b.dataset.suTest); });
+$("#su-linear").addEventListener("change", () => suTest("linear"));
+$("#su-slack").addEventListener("change", () => suTest("slack"));
+$("#su-gh-login").onclick = async () => {
+  try { const r = await api("/api/org/gh-login", { default: true }); pinned.add(r.id); savePinned(); openWin(r.id); suRes("github", null, t("Termine o login no terminal e clique em “Verificar de novo”.")); }
+  catch (e) { suRes("github", false, e.message); }
+};
+$("#su-back").onclick = () => suGo(Math.max(1, su.step - 1));
+$("#su-next").onclick = () => {
+  if (su.step === 2) { const tr = suRadio("su-tracker"); if (tr && su.tested[tr] === undefined) suTest(tr); } // avisa, mas não impede
+  suGo(Math.min(4, su.step + 1));
+};
+function closeSetup(later) { $("#setup").hidden = true; if (later) store.set("setup-later", "1"); }
+$("#su-skip").onclick = () => closeSetup(true);
+document.addEventListener("click", (e) => { if (e.target.closest("[data-open-setup]")) openSetup(); });
+$("#setup").addEventListener("keydown", (e) => { if (e.key === "Escape") closeSetup(true); });
+async function openSetup() {
+  $("#setup").hidden = false; suToggle(); suGo(1);
+  try { su.info = await api("/api/setup/info", {}); } catch { su.info = {}; }
+  if (!$("#su-path").value) $("#su-path").placeholder = su.info.repos_root || "~/Projects";
+  $("#su-name").placeholder = t("Pessoal");
+  const logged = !!su.info.claude_login;
+  $("#su-claude-row").hidden = !logged; $("#su-claude").checked = logged;
+  $("#su-claude-out").textContent = logged ? t("Recomendado: suas sessões continuam com a conta, as configurações e os MCPs de sempre.")
+    : t("Não encontrei login do Claude nesta máquina: no fim, um terminal abre para você entrar.");
+  suRes("github", null, su.info.gh_user ? "✓ " + t("logado como {user}", { user: su.info.gh_user }) : t("O gh não está logado (opcional: sem ele, os cards não mostram PRs)."));
+  su.tested.github = !!su.info.gh_user;
+  suScan();
+}
+$("#setup-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const v = (id) => $(id).value.trim(), name = v("#su-name") || $("#su-name").placeholder, id = suSlug(name);
+  const tr = suRadio("su-tracker"), host = suRadio("su-host"), useDefault = $("#su-claude").checked && !!su.info?.claude_login;
+  $("#su-done").disabled = true; $("#su-out").className = "msg"; $("#su-out").textContent = t("salvando…");
+  try {
+    await api("/api/org/create", { id, name, color: "#4f8cff", paths: v("#su-path") || $("#su-path").placeholder, use_default_claude: useDefault,
+      linear_key: tr === "linear" ? v("#su-linear") : "", jira_url: tr === "jira" ? v("#su-jira-url") : "", jira_email: tr === "jira" ? v("#su-jira-email") : "",
+      jira_token: tr === "jira" ? v("#su-jira-token") : "", git_host: host, github_org: host === "github" ? v("#su-gh-org") : "",
+      bitbucket_email: host === "bitbucket" ? v("#su-bb-email") : "", bitbucket_token: host === "bitbucket" ? v("#su-bb-token") : "",
+      email: v("#su-email"), slack_token: v("#su-slack") });
+    ["#su-linear", "#su-jira-token", "#su-bb-token", "#su-slack"].forEach(s => { $(s).value = ""; }); // segredo não fica na tela
+    closeSetup(false); await tick();
+    if (!useDefault) orgLogin(id); // login separado do Claude: abre o terminal para entrar
+    else if (host === "bitbucket") bbSetup(id);
+  } catch (err) { $("#su-out").className = "msg err"; $("#su-out").textContent = err.message; }
+  finally { $("#su-done").disabled = false; }
 };
 
 // ---------- terminal avulso (shell ou Claude sem card) numa pasta das organizações ----------
@@ -1336,8 +1547,10 @@ function renderStatus(err) {
   $("#d-cc").className = "dot " + (err ? "bad" : "ok");
   $("#t-cc").textContent = err ? t("servidor fora do ar") : t("{n} no tmux · {m} recentes", { n: st.sessions.filter(s => s.window).length, m: st.sessions.length });
   const ao = orgOf(st.activeOrg);
-  const html = [st.linErr && esc(st.linErr), err && esc(t("Não consegui falar com o servidor local ({err}). Ele está rodando? python3 server.py", { err })),
-    ao && !ao.login && `${t("A organização ativa ({org}) está sem login no Claude: o Jarvis e os resumos não funcionam nela.", { org: esc(ao.name) })}
+  const noOrg = st.orgs && !st.orgs.length && !err;
+  const html = [noOrg ? `${t("Conecte o quadro às suas ferramentas (Linear ou Jira, GitHub, Slack).")} <button type="button" class="primary" data-open-setup>${t("Configurar")}</button>`
+      : st.linErr && esc(st.linErr), err && esc(t("Não consegui falar com o servidor local ({err}). Ele está rodando? python3 server.py", { err })),
+    ao && !ao.login && `${t(st.voice ? "A organização ativa ({org}) está sem login no Claude: o Jarvis e os resumos não funcionam nela." : "A organização ativa ({org}) está sem login no Claude: as sessões e os resumos dela não funcionam.", { org: esc(ao.name) })}
       <button type="button" class="primary" data-org-login="${esc(ao.id)}">${t("Entrar no Claude da {org}", { org: esc(ao.name) })}</button> ${t("ou escolha outra no seletor.")}`,
     ao && ao.gh_login === false && `${t("A organização ativa ({org}) está sem login no GitHub: PRs nos cards, <code>gh</code> e <code>git push</code> dela não funcionam.", { org: esc(ao.name) })}
       <button type="button" class="primary" data-gh-login="${esc(ao.id)}">${t("Entrar no GitHub da {org}", { org: esc(ao.name) })}</button>`,
@@ -1357,6 +1570,7 @@ async function tick() {
     renderSlack();
     applyEco(!!st.settings.eco);
     renderOrgSel();
+    if (!st.orgs.length && !st.setupSeen) { st.setupSeen = true; if (store.get("setup-later") !== "1") openSetup(); }
     $("#attach").textContent = `tmux attach -t ${s.tmux}`;
     renderStatus(null);
   } catch (e) { renderStatus(e.message); }

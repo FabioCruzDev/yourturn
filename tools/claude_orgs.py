@@ -245,6 +245,9 @@ def sync():
     """Links do genérico, CLAUDE.md que importa a base e settings = base mesclada com o que a organização tem."""
     for org, cfg in ORGS.items():
         d = cfg["dir"]
+        if d == BASE:  # organização que usa o próprio ~/.claude (login de sempre): nada a ligar nem mesclar
+            write_git(org)
+            continue
         d.mkdir(mode=0o700, exist_ok=True)
         for rel in LINKED:
             link(d, rel)
@@ -387,7 +390,8 @@ _claude_org_dir() {{
 claude() {{
   if [ -n "${{CLAUDE_CONFIG_DIR:-}}" ]; then command claude "$@"; return; fi
   local d; d=$(_claude_org_dir)
-  if [ -n "$d" ]; then CLAUDE_CONFIG_DIR="$d" command claude "$@"; else command claude "$@"; fi
+  # o ~/.claude é o padrão: defini-lo explicitamente faria o Claude ler ~/.claude/.claude.json em vez de ~/.claude.json
+  if [ -n "$d" ] && [ "$d" != "$HOME/.claude" ]; then CLAUDE_CONFIG_DIR="$d" command claude "$@"; else command claude "$@"; fi
 }}
 # `gh` com a conta da organização da pasta (GH_CONFIG_DIR do settings.json dela); GH_CONFIG_DIR à mão vence
 gh() {{
@@ -402,7 +406,7 @@ gh() {{
 
 def write_bashrc():
     aliases = "\n".join(f'claude-{o}() {{ CLAUDE_CONFIG_DIR={h(c["dir"]).replace("~", "$HOME", 1)} command claude "$@"; }}'
-                        for o, c in ORGS.items())
+                        for o, c in ORGS.items() if c["dir"] != BASE)
     block = BASH_BLOCK.format(begin=MARK_BEGIN, end=MARK_END, aliases=aliases)
     t = BASHRC.read_text() if BASHRC.exists() else ""
     if MARK_BEGIN in t:
@@ -590,8 +594,10 @@ def set_tools(org, linear_key="", jira_url="", jira_email="", jira_token="", jir
 
 
 def add(org, paths, name="", color="", github_org="", email="", linear_key="", jira_url="", jira_email="", jira_token="",
-        jira_jql="", git_host="github", bitbucket_email="", bitbucket_token="", slack_token=""):
-    """Cria a organização: pasta de config do Claude (sem login), GitHub e git próprios, Linear e/ou Jira opcionais."""
+        jira_jql="", git_host="github", bitbucket_email="", bitbucket_token="", slack_token="", use_default_claude=False):
+    """Cria a organização: pasta de config do Claude (sem login), GitHub e git próprios, Linear e/ou Jira opcionais.
+    `use_default_claude`: usa o ~/.claude e o gh de sempre (já logados) em vez de pastas novas; é o caso da primeira
+    organização de quem tem uma conta só (o assistente de configuração do quadro)."""
     if not re.fullmatch(r"[a-z][a-z0-9-]{1,30}", org or ""):
         raise ValueError(tr("Identificador: só letras minúsculas, números e hífen (ex.: acme)"))
     if org in ORGS:
@@ -616,6 +622,8 @@ def add(org, paths, name="", color="", github_org="", email="", linear_key="", j
         clean.append(h(p))
     if not clean:
         raise ValueError(tr("Informe ao menos uma pasta de projetos"))
+    if use_default_claude and any(cfg["dir"] == BASE for cfg in ORGS.values()):
+        raise ValueError(tr("Outra organização já usa o login de sempre do Claude (~/.claude)"))
     data = ORG_DATA / org
     (data / "gh").mkdir(parents=True, exist_ok=True)
     os.chmod(data, 0o700)
@@ -626,9 +634,10 @@ def add(org, paths, name="", color="", github_org="", email="", linear_key="", j
                                                       "git_host": git_host if git_host != "github" else ""}.items() if v})
     set_tools(org, linear_key, jira_url, jira_email, jira_token, jira_jql, bitbucket_email=bitbucket_email,
               bitbucket_token=bitbucket_token, slack_token=slack_token)
-    ORGS[org] = {"dir": HOME / f".claude-{org}", "paths": clean}
+    ORGS[org] = {"dir": BASE if use_default_claude else HOME / f".claude-{org}", "paths": clean}
     ORGS[org]["dir"].mkdir(mode=0o700, exist_ok=True)
-    set_env(org, {"GH_CONFIG_DIR": str(data / "gh")})
+    if not use_default_claude:  # com o ~/.claude de sempre, o gh também é o de sempre (~/.config/gh)
+        set_env(org, {"GH_CONFIG_DIR": str(data / "gh")})
     sync()
     return ORGS[org]
 
