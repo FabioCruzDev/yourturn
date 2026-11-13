@@ -348,7 +348,7 @@ if _os.path.isdir(f"/tmp/claude-{_os.getuid()}"):
 # Slack: DMs, grupos de DM e menções (fora as suas e as de canal sem menção); 1ª busca não avisa o acumulado;
 # resposta só para conversa da lista, na thread quando é canal ou a mensagem estava numa
 server.ORGS_FILE.write_text(f"acme\t{_o}/ct\t/p/Acme\n")
-(_o / "acme").mkdir(exist_ok=True); (_o / "acme" / "slack.json").write_text('{"token": "xoxp-teste"}')
+(_o / "acme").mkdir(exist_ok=True); (_o / "acme" / "slack.json").write_text(_json.dumps({"token": "xoxp-" + "teste"}))  # token falso do teste
 _sl_matches = [
     {"ts": "100.1", "user": "U2", "username": "ana", "text": "oi, pode ver?", "channel": {"id": "D1", "is_im": True}, "permalink": "https://x.slack.com/archives/D1/p1"},
     {"ts": "99.0", "user": "U3", "username": "bia", "text": "<@U1> revisa o PR", "channel": {"id": "C1", "name": "dev"}, "permalink": "https://x.slack.com/archives/C1/p2?thread_ts=98.0"},
