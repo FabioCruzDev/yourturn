@@ -57,7 +57,7 @@ PUSH_SUBS = HERE / "push_subs.json"  # aparelhos com notificação ativa (inscri
 PWA = {"/manifest.webmanifest": ("pwa/manifest.webmanifest", "application/manifest+json"),
        "/sw.js": ("pwa/sw.js", "text/javascript"),
        "/icon-192.png": ("pwa/icon-192.png", "image/png"), "/icon-512.png": ("pwa/icon-512.png", "image/png")}
-MAX_UPLOAD = 50 * 1024 * 1024
+MAX_UPLOAD = 100 * 1024 * 1024
 RECENT_DAYS = 7
 # xterm.js 5.3.0 + addon-fit 0.8.0 copiados para vendor/ (sem depender de CDN)
 VENDOR = {"/vendor/xterm.js": "text/javascript", "/vendor/xterm-addon-fit.js": "text/javascript",
@@ -1138,6 +1138,34 @@ def window_of(sid):
     if not w or w not in tmux_windows():
         raise ValueError(tr("Essa sessão não está numa janela do quadro"))
     return f"{TMUX}:{w}"
+
+
+DOWNLOAD_MAX = 512 * 2**20
+
+
+def download_path(body, base=None, root=None):
+    """Arquivo que o terminal pediu para baixar: {"id": sessão do quadro, "paths": [candidatos]}. O 1º candidato que
+    existe vence (a página manda o caminho da linha e, se ele encosta no fim, o caminho emendado com a linha de baixo,
+    porque o Claude quebra caminho longo). Relativo = à pasta atual da janela; só arquivo dentro da sua pasta pessoal,
+    conferido depois de resolver links simbólicos e `..`."""
+    if base is None:
+        target = window_of(str(body.get("id", "")))  # só janela do quadro, como as outras ações
+        base = tmux("display", "-p", "-t", target, "#{pane_current_path}").stdout.strip() or str(Path.home())
+    root = (root or Path.home()).resolve()
+    for c in list(body.get("paths") or [])[:6]:
+        c = re.sub(r":\d+(?::\d+)?$", "", str(c).strip().strip("`'\"()[]<>,;"))  # arquivo.py:60
+        if not c or "\0" in c:
+            continue
+        p = Path(c).expanduser()
+        try:
+            p = (p if p.is_absolute() else Path(base) / p).resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if p.is_file() and p.is_relative_to(root):
+            if p.stat().st_size > DOWNLOAD_MAX:
+                raise ValueError(tr("Arquivo maior que {n} MB", n=DOWNLOAD_MAX // 2**20))
+            return p
+    raise FileNotFoundError(tr("Não achei esse arquivo na sua pasta pessoal desta máquina"))
 
 
 def kill(body):
@@ -2588,6 +2616,27 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             term_close(tid)
 
+    def _download(self):
+        """Manda o arquivo para o navegador (a página salva como download na máquina de quem está usando o quadro)."""
+        try:
+            p = download_path(json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0)))))
+        except FileNotFoundError as e:
+            return self._json(404, {"error": str(e)})
+        except (ValueError, KeyError, TypeError) as e:
+            return self._json(400, {"error": str(e)})
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(p.stat().st_size))
+        self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(p.name)}")
+        self.send_header("X-Path", quote(str(p)))
+        self.end_headers()
+        try:
+            with open(p, "rb") as f:
+                while chunk := f.read(1 << 20):
+                    self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def _upload(self):
         # application/octet-stream também força o preflight CORS, como o JSON das outras rotas
         size = int(self.headers.get("Content-Length", 0))
@@ -2672,6 +2721,8 @@ class Handler(BaseHTTPRequestHandler):
                    "/api/slack/hide": slack_hide, "/api/terminal": open_terminal, "/api/resources/kill": res_action("kill"),
                    "/api/resources/docker": res_action("docker_action"), "/api/resources/dropcache": res_action("drop_cache"),
                    "/api/resources/cleanup": res_action("cleanup")}
+        if self.path == "/api/download":
+            return self._download()
         if self.path not in actions:
             return self._json(404, {"error": "not found"})
         try:

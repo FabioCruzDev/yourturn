@@ -13,7 +13,9 @@ embutido no navegador (ou no celular).
   sessão (hooks do Claude Code + o que está na tela do tmux); também dá para mover à mão.
 - **Sessões por card**: inicia o Claude Code num repositório (opcionalmente num worktree por card), retoma, hiberna
   sessões paradas, manda a mesma mensagem para várias sessões, lembrete que reabre o terminal de quem continua esperando.
-- **Terminal embutido** (xterm.js por WebSocket até a janela do tmux), envio de arquivos, maximizar/lado a lado.
+- **Terminal embutido** (xterm.js por WebSocket até a janela do tmux), envio de arquivos, maximizar/lado a lado. Os
+  caminhos de arquivo que a sessão mostra (`docs/plano.md`, `~/x.csv`, `/home/…/relatorio.pdf`) são clicáveis e baixam
+  para a máquina onde está o navegador (só arquivos da sua pasta pessoal; o botão ⤓ baixa um caminho selecionado ou digitado).
 - **Ferramentas**: Linear e/ou Jira (Cloud ou Data Center), GitHub ou Bitbucket (selos de PR: checks, reviews,
   comentários), Slack (DMs e menções numa lateral, resposta pelo quadro), resumo por card com o Claude Haiku.
 - **Organizações**: separa várias contas (ex.: dois empregos e o pessoal): cada uma tem `CLAUDE_CONFIG_DIR`, login do

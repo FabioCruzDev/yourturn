@@ -13,7 +13,9 @@ terminal in the browser (or your phone).
   (Claude Code hooks + what is on the tmux screen); you can also move it by hand.
 - **Sessions per card**: start Claude Code in a repo (optionally in a git worktree per card), resume, hibernate idle
   sessions, send the same message to several sessions, reminders that reopen terminals still waiting for you.
-- **Embedded terminal** (xterm.js over a WebSocket to the tmux window), file upload, maximize/tile.
+- **Embedded terminal** (xterm.js over a WebSocket to the tmux window), file upload, maximize/tile. File paths the
+  session prints (`docs/plan.md`, `~/x.csv`, `/home/…/report.pdf`) are clickable and download to the machine you're
+  browsing from (only files inside your home folder; the ⤓ button downloads a selected or typed path).
 - **Tools**: Linear and/or Jira (Cloud or Data Center), GitHub or Bitbucket (PR badges: checks, reviews, comments),
   Slack (DMs and mentions in a side panel, reply from the board), per-card summaries with Claude Haiku.
 - **Organizations**: keep several accounts apart (e.g. two employers and personal): each one has its own

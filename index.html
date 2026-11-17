@@ -783,6 +783,7 @@ select.org-pick option{color:var(--fg);background:var(--card)}
     <div class="whead"><span class="dot bad"></span><b></b>
       <button type="button" data-attach class="ico" data-ico="attach" aria-label="Anexar" title="Anexar: o caminho do arquivo vai para o prompt (também dá para arrastar ou colar um print no terminal)"></button>
       <input type="file" multiple hidden data-file>
+      <button type="button" data-download class="ico" data-ico="download" aria-label="Baixar" title="Baixar um arquivo desta máquina: selecione o caminho no terminal (ou digite) — também dá para clicar no caminho"></button>
       <button type="button" class="ico" data-ico="holo" data-holo aria-pressed="false" aria-label="Holo" title="Holo: terminal de vidro translúcido; toque de novo para voltar"></button>
       <button type="button" data-fsize="-0.5" title="Letra menor" aria-label="Letra menor">A−</button>
       <button type="button" data-fsize="0.5" title="Letra maior" aria-label="Letra maior">A+</button>
@@ -830,6 +831,7 @@ const ICON = {
   restore: svg('<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>'),
   later: svg('<path d="M18 6 6 18M6 6l12 12"/>'),
   kill: svg('<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6"/>'),
+  download: svg('<path d="M12 3v12m-5-5 5 5 5-5"/><path d="M4 19h16"/>'),
 };
 function setMaxBtn(b, max) {
   b.innerHTML = ICON[max ? "restore" : "max"];
@@ -2424,6 +2426,12 @@ function openWin(sid, { background = false } = {}) {
   });
   const fileInput = el.querySelector("[data-file]");
   el.querySelector("[data-attach]").onclick = () => fileInput.click();
+  el.querySelector("[data-download]").onclick = () => {
+    // Seleção do terminal (caminho quebrado em várias linhas vira um só) ou o caminho digitado
+    const sel = (wins.get(sid)?.term?.getSelection() || "").split("\n").map(l => l.trim()).join("");
+    const p = sel || prompt(t("Caminho do arquivo nesta máquina (relativo à pasta da sessão ou absoluto):"));
+    if (p && p.trim()) download(sid, [p.trim()]);
+  };
   fileInput.onchange = () => { attach(sid, [...fileInput.files]); fileInput.value = ""; };
   const hasFiles = (e) => e.dataTransfer?.types.includes("Files");
   el.addEventListener("dragover", (e) => { if (!hasFiles(e)) return; e.preventDefault(); el.classList.add("dropfile"); });
@@ -2461,6 +2469,55 @@ async function attach(sid, files) {
     }
   } catch (e) { alert(t("Não consegui anexar: {err}", { err: e.message })); }
   finally { b.disabled = false; b.innerHTML = ICON.attach; termFocus(wins.get(sid)?.term); }
+}
+// Baixar: o servidor acha o arquivo na máquina do quadro e a página salva na máquina de quem está usando
+async function download(sid, paths) {
+  const b = wins.get(sid)?.el.querySelector("[data-download]");
+  if (b) b.disabled = true;
+  try {
+    const r = await fetch("/api/download", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: sid, paths }) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+    const name = decodeURIComponent((r.headers.get("Content-Disposition") || "").match(/filename\*=UTF-8''([^;]+)/)?.[1] || "arquivo");
+    const url = URL.createObjectURL(await r.blob());
+    const a = Object.assign(document.createElement("a"), { href: url, download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60e3);
+  } catch (e) { alert(t("Não consegui baixar: {err}", { err: e.message })); }
+  finally { if (b) b.disabled = false; }
+}
+// Caminhos no texto do terminal: absolutos (/a/b), da home (~/x), relativos à pasta da sessão (docs/x.md, ./x) e nomes
+// com extensão (plano.md). URL não conta (o addon de links cuida dela). O Claude quebra caminho longo na tela, com recuo:
+// o pedaço no fim de uma linha é emendado com o começo da de baixo (e o do começo, com o fim da de cima); a página manda
+// as duas versões e o servidor usa a primeira que existe.
+const PATH_CHARS = /[\w.@+~\/-]+/g;
+const looksLikePath = (tok) => /^(~\/|\/)[^/]+\/[^/]|^~\/[^/]|^\.{1,2}\/[^/]/.test(tok)
+  || (/[A-Za-z0-9_-]\.[A-Za-z]\w{0,7}$/.test(tok) && /[A-Za-z]/.test(tok) && (tok.includes("/") || tok.length > 3));
+function pathCandidates(text, before = "", after = "") {
+  const out = [], first = text.search(/\S/);
+  for (const m of text.matchAll(PATH_CHARS)) {
+    let tok = m[0], start = m.index;
+    if (text.slice(Math.max(0, start - 1), start) === ":" || tok.startsWith("//")) continue; // https://…
+    const lead = tok.match(/^[.-]*(?=[^./~-])/)?.[0] || "";
+    if (lead && !/^\.{1,2}\//.test(tok)) { tok = tok.slice(lead.length); start += lead.length; }
+    const atEnd = m.index + m[0].length >= text.length, bare = tok.replace(/[.\-]+$/, ""); // "plano.md." no fim da frase
+    const joined = [atEnd && after && tok + after, start === first && before && before + tok].filter(Boolean);
+    const paths = [...new Set([...joined.filter(looksLikePath), ...(looksLikePath(bare) ? [bare] : [])])];
+    if (paths.length) out.push({ tok: bare, start, end: start + bare.length, paths });
+  }
+  return out;
+}
+function pathLinks(term, sid) {
+  return { provideLinks(y, cb) {
+    const buf = term.buffer.active, line = buf.getLine(y - 1);
+    if (!line) return cb(undefined);
+    const text = line.translateToString(true);
+    const after = (buf.getLine(y)?.translateToString(true) || "").trimStart().match(/^[\w.@+~\/-]+/)?.[0] || "";
+    const before = y > 1 ? (buf.getLine(y - 2).translateToString(true).match(/[\w.@+~\/-]+$/)?.[0] || "") : "";
+    const links = pathCandidates(text, before, after).map(({ tok, start, end, paths }) => ({
+      range: { start: { x: start + 1, y }, end: { x: end, y } }, text: tok, decorations: { underline: true, pointerCursor: true },
+      activate: (e) => { if (e.button === 0) download(sid, paths); } }));
+    cb(links.length ? links : undefined);
+  } };
 }
 // Terminal de verdade: o servidor anexa um cliente tmux à janela da sessão (via WebSocket)
 // ---------- leitura no terminal ----------
@@ -2526,6 +2583,7 @@ function startTerm(sid, win, focus) {
   const openLink = (e, uri) => { if (/^https?:\/\//.test(uri)) window.open(uri, "_blank", "noopener"); };
   if (window.WebLinksAddon) term.loadAddon(new WebLinksAddon.WebLinksAddon(openLink));
   term.options.linkHandler = { activate: openLink, allowNonHttpProtocols: false };
+  term.registerLinkProvider(pathLinks(term, sid));
   term.open(host);
   // Copiar: selecionar já copia; Ctrl+C com seleção copia (sem seleção continua sendo o Ctrl+C do terminal)
   const copySel = () => {

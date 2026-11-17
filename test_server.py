@@ -550,4 +550,27 @@ try:
         pass
 finally:
     server.PROJECTS, server.ORGS_FILE = _saved_h
+# Baixar pelo terminal: só arquivo dentro da pasta pessoal (depois de resolver link simbólico e ..), 1º candidato que existe
+_dl = _P(_tmp.mkdtemp()).resolve()
+(_dl / "repo" / "docs").mkdir(parents=True)
+(_dl / "repo" / "docs" / "plano.md").write_text("plano")
+(_dl / "repo" / "server.py").write_text("x")
+(_dl / "repo" / "fora").symlink_to("/etc/passwd")
+_d1 = lambda *paths: server.download_path({"paths": list(paths)}, base=_dl / "repo", root=_dl)
+assert _d1("docs/plano.md") == _dl / "repo" / "docs" / "plano.md"
+assert _d1("server.py:60") == _dl / "repo" / "server.py"                       # arquivo:linha
+assert _d1(str(_dl / "repo" / "docs" / "plano.md")) == _dl / "repo" / "docs" / "plano.md"
+assert _d1("docs/pla", "docs/plano.md") == _dl / "repo" / "docs" / "plano.md"  # caminho cortado pela quebra de linha
+for _bad in (["/etc/passwd"], ["fora"], ["../../../../etc/passwd"], ["docs"], ["nao-existe.md"], [], ["a\0b"]):
+    try:
+        _d1(*_bad); raise AssertionError(f"baixou {_bad}")
+    except FileNotFoundError:
+        pass
+_max, server.DOWNLOAD_MAX = server.DOWNLOAD_MAX, 2
+try:
+    _d1("docs/plano.md"); raise AssertionError("passou do limite")
+except ValueError:
+    pass
+finally:
+    server.DOWNLOAD_MAX = _max
 print("ok")

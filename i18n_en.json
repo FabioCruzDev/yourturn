@@ -582,5 +582,10 @@
  "Corrigir hooks": "Fix hooks",
  "Instala os hooks do quadro no <code>settings.json</code> do Claude Code (se ainda não estiverem lá), para saber quando cada sessão espera você.": "Installs the board's hooks in Claude Code's <code>settings.json</code> (if they aren't there yet), so it knows when each session is waiting for you.",
  "settings.json inválido em {dirs}: corrija o arquivo e tente de novo": "Invalid settings.json in {dirs}: fix the file and try again",
- "Regravar os hooks do quadro em {dirs} apontando para {hook}? (guarda uma cópia em settings.json.bak-kanban)": "Rewrite the board's hooks in {dirs} pointing to {hook}? (keeps a copy in settings.json.bak-kanban)"
+ "Regravar os hooks do quadro em {dirs} apontando para {hook}? (guarda uma cópia em settings.json.bak-kanban)": "Rewrite the board's hooks in {dirs} pointing to {hook}? (keeps a copy in settings.json.bak-kanban)",
+ "Baixar": "Download",
+ "Baixar um arquivo desta máquina: selecione o caminho no terminal (ou digite) — também dá para clicar no caminho": "Download a file from this machine: select its path in the terminal (or type it) — you can also click the path",
+ "Não consegui baixar: {err}": "Couldn't download: {err}",
+ "Caminho do arquivo nesta máquina (relativo à pasta da sessão ou absoluto):": "File path on this machine (relative to the session folder, or absolute):",
+ "Não achei esse arquivo na sua pasta pessoal desta máquina": "Couldn't find that file in your home folder on this machine"
 }
