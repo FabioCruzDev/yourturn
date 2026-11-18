@@ -587,5 +587,8 @@
  "Baixar um arquivo desta máquina: selecione o caminho no terminal (ou digite) — também dá para clicar no caminho": "Download a file from this machine: select its path in the terminal (or type it) — you can also click the path",
  "Não consegui baixar: {err}": "Couldn't download: {err}",
  "Caminho do arquivo nesta máquina (relativo à pasta da sessão ou absoluto):": "File path on this machine (relative to the session folder, or absolute):",
- "Não achei esse arquivo na sua pasta pessoal desta máquina": "Couldn't find that file in your home folder on this machine"
+ "Não achei esse arquivo na sua pasta pessoal desta máquina": "Couldn't find that file in your home folder on this machine",
+ "Saiu do seu filtro (atribuídas a você), mas tem sessão aberta no quadro: o card fica até ela acabar": "Left your filter (assigned to you), but it has a session open on the board: the card stays until it ends",
+ "com {name}": "with {name}",
+ "sem responsável": "unassigned"
 }

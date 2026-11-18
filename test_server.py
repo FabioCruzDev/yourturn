@@ -205,7 +205,7 @@ assert _err is None and len(_iss) == 1, (_iss, _err)
 assert _iss[0] == {"identifier": "ACME-7", "title": "Corrigir login", "url": "https://acme.atlassian.net/browse/ACME-7",
                    "branchName": "acme-7-corrigir-login", "priority": 2, "priorityLabel": "High",
                    "createdAt": "2026-10-30T09:00:00.000-03:00", "updatedAt": "2026-10-30T10:00:00.000-03:00",
-                   "state": {"name": "Em progresso", "type": "started"}, "team": {"name": "Acme App"}}, _iss[0]
+                   "state": {"name": "Em progresso", "type": "started"}, "team": {"name": "Acme App"}, "assignee": None}, _iss[0]
 assert _reqs[-1].full_url == "https://acme.atlassian.net/rest/api/3/search/jql"
 assert _reqs[-1].get_header("Authorization") == "Basic " + server.base64.b64encode(b"eu@acme.com:t0k").decode()
 assert _json.loads(_reqs[-1].data)["jql"] == server.JIRA_JQL
@@ -573,4 +573,26 @@ except ValueError:
     pass
 finally:
     server.DOWNLOAD_MAX = _max
+# Card com sessão aberta não some quando a issue sai do filtro "atribuídas a você" (reatribuída para revisão)
+_saved_k = server.issue_by_key, server.hibernated, server.jira_conf
+_asked = []
+server.issue_by_key = lambda org, key: _asked.append((org, key)) or ({"identifier": key, "title": "x", "assignee": "Outra Pessoa"} if key != "SUMIU-1" else None)
+server.hibernated, server.jira_conf = (lambda: {"hib": 1}), (lambda org: {"url": "u"} if org == "acme" else None)
+server._kept_cache.clear()
+try:
+    _sess = [{"id": "a", "issue": "ACME-42", "window": "w", "org": "acme"},   # aberta, fora do filtro: volta
+             {"id": "b", "issue": "GLX-1", "window": "w", "org": "globex"},     # já está na lista
+             {"id": "c", "issue": "GLX-9", "window": None, "org": "globex"},    # fechada e não hibernada: não volta
+             {"id": "hib", "issue": "GLX-7", "window": None, "org": "globex"},  # hibernada: volta (tem o Retomar)
+             {"id": "d", "issue": "SUMIU-1", "window": "w", "org": "acme"},     # apagada no Jira: nada
+             {"id": "e", "issue": "ACME-42", "window": "w2", "org": "acme"},   # duas sessões, um card só
+             {"id": "f", "issue": "", "window": "w", "org": "acme"}]
+    _k = server.kept_issues([{"identifier": "GLX-1"}], _sess)
+    assert [(i["identifier"], i["org"], i["source"], i["kept"]) for i in _k] == [("ACME-42", "acme", "jira", True), ("GLX-7", "globex", "linear", True)], _k
+    assert _asked == [("acme", "ACME-42"), ("globex", "GLX-7"), ("acme", "SUMIU-1")], _asked
+    server.kept_issues([{"identifier": "GLX-1"}], _sess)
+    assert len(_asked) == 3  # cache de 60 s: o polling de 3 s não consulta o Jira de novo
+finally:
+    server.issue_by_key, server.hibernated, server.jira_conf = _saved_k
+assert server.ISSUE_KEY.match("ACME-42") and not server.ISSUE_KEY.match("X-1 OR project = Y") and not server.ISSUE_KEY.match("ACME-")
 print("ok")

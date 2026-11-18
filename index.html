@@ -324,6 +324,7 @@ select.org-pick option{color:var(--fg);background:var(--card)}
 .su-res.bad{color:var(--bad)}
 .su-chk{display:flex;flex-direction:row;gap:8px;align-items:flex-start;font-weight:400!important}
 .su-chk input{margin-top:3px}
+.card .kept{font-size:.72rem;padding:0 6px;border-radius:9px;border:1px dashed var(--muted,#9daac8);opacity:.85;white-space:nowrap}
 .su-sum{margin:0;padding-left:1.2em;font-size:.85rem;display:flex;flex-direction:column;gap:4px}
 .setup .acts{display:flex;flex-direction:row;gap:8px;align-items:center;flex-wrap:wrap}
 .setup .acts .grow{flex:1}
@@ -1501,7 +1502,7 @@ function cardHtml({ i, ss, pinned }) {
     ? `<button class="toggle" data-remind="${id}" aria-pressed="${remind}" title="${t("Se você fechar o terminal e ela continuar esperando, ele reabre a cada {d}", { d: remindLabel() })}">${t("Lembrete {d}", { d: remindLabel() })}</button>` : "";
   const fresh = !st.seen?.has(i.identifier);
   return `<article class="card${fresh ? " new" : ""}" draggable="true" data-issue="${id}">
-    <div class="top"><span class="id">${id}</span>${orgPick(i)}<span>${esc(i.team?.name || "")}</span><span class="prio">${i.priority ? esc(i.priorityLabel) + " · " : ""}${dl ? `<span class="age ${dl.tone}" title="${esc(dl.tip)}">${dl.age}</span>` : ""}</span></div>
+    <div class="top"><span class="id">${id}</span>${orgPick(i)}<span>${esc(i.team?.name || "")}</span>${i.kept ? `<span class="kept" title="${esc(t("Saiu do seu filtro (atribuídas a você), mas tem sessão aberta no quadro: o card fica até ela acabar"))}">${esc(i.assignee ? t("com {name}", { name: i.assignee }) : t("sem responsável"))}</span>` : ""}<span class="prio">${i.priority ? esc(i.priorityLabel) + " · " : ""}${dl ? `<span class="age ${dl.tone}" title="${esc(dl.tip)}">${dl.age}</span>` : ""}</span></div>
     ${dl ? `<div class="deadline ${dl.tone}" title="${esc(dl.tip)}"><i style="width:${dl.pct}%"></i></div>` : ""}
     ${title}
     ${i.local && i.description ? `<div class="desc">${esc(i.description)}</div>` : ""}

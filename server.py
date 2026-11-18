@@ -67,7 +67,7 @@ ALLOWED_KEYS = {"Enter", "Escape", "Up", "Down", "Tab", "1", "2", "3"}
 LINEAR_QUERY = """query {
   issues(filter: {assignee: {isMe: {eq: true}}}, first: 100, orderBy: updatedAt) {
     nodes { identifier title url branchName priority priorityLabel createdAt updatedAt
-            state { name type } team { key name } parent { identifier } }
+            state { name type } team { key name } parent { identifier } assignee { name } }
   }
 }"""
 _linear_cache = {}  # organização -> (ts, issues, erro)
@@ -146,13 +146,13 @@ def jira_issue(base, x):
             "branchName": f"{x['key'].lower()}-{slug(f.get('summary') or '')}", "priority": prio,
             "priorityLabel": PRIORITY_LABELS[prio], "createdAt": jira_time(f.get("created")), "updatedAt": jira_time(f.get("updated")),
             "state": {"name": status.get("name", ""), "type": JIRA_STATE.get((status.get("statusCategory") or {}).get("key"), "unstarted")},
-            "team": {"name": (f.get("project") or {}).get("name", "")}}
+            "team": {"name": (f.get("project") or {}).get("name", "")}, "assignee": (f.get("assignee") or {}).get("displayName")}
 
 
 def jira_fetch(c):
     base = c["url"].rstrip("/")
     body = {"jql": c.get("jql") or JIRA_JQL, "maxResults": 100,
-            "fields": ["summary", "status", "priority", "created", "updated", "project", "issuetype"]}
+            "fields": ["summary", "status", "priority", "created", "updated", "project", "issuetype", "assignee"]}
     if c.get("email"):  # Cloud
         auth, path = "Basic " + base64.b64encode(f"{c['email']}:{c['token']}".encode()).decode(), "/rest/api/3/search/jql"
     else:  # Data Center / Server
@@ -170,6 +170,51 @@ def jira_fetch(c):
     return [jira_issue(base, x) for x in data.get("issues") or [] if not ((x.get("fields") or {}).get("issuetype") or {}).get("subtask")], None
 
 
+LINEAR_ISSUE = """query($id: String!) { issue(id: $id) {
+  identifier title url branchName priority priorityLabel createdAt updatedAt state { name type } team { key name }
+  assignee { name } } }"""
+ISSUE_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]*-\d+$")
+_kept_cache = {}  # (org, chave) -> (ts, issue ou None)
+
+
+def issue_by_key(org, key):
+    """Uma issue pela chave, fora do filtro "atribuídas a você" (Jira ou Linear da organização). None se não achar."""
+    if not ISSUE_KEY.match(key):
+        return None
+    if org and jira_conf(org):
+        got, _ = jira_fetch({**jira_conf(org), "jql": f"key = {key}"})
+        return (got or [None])[0]
+    lk = linear_key(org)
+    if not lk:
+        return None
+    req = urllib.request.Request("https://api.linear.app/graphql", data=json.dumps({"query": LINEAR_ISSUE, "variables": {"id": key}}).encode(),
+                                 headers={"Authorization": lk, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            i = (json.load(r).get("data") or {}).get("issue")
+    except Exception:  # noqa: BLE001  (rede, 404: o card só não volta agora; tenta de novo no próximo ciclo)
+        return None
+    return {**i, "assignee": (i.get("assignee") or {}).get("name")} if i else None
+
+
+def kept_issues(issues, sess, max_age=60):
+    """Issues com sessão aberta ou hibernada no quadro que saíram do filtro do Linear/Jira (ex.: reatribuída a outra
+    pessoa para revisão): sem isto o card some e a sessão fica órfã (só aparece na notificação). Marcadas com "kept"."""
+    have, hib, out = {i["identifier"] for i in issues}, hibernated(), []
+    for s in sess:
+        key = s.get("issue") or ""
+        if not key or key in have or not (s.get("window") or s["id"] in hib):
+            continue
+        have.add(key)
+        ts, i = _kept_cache.get((s.get("org"), key), (0.0, None))
+        if time.time() - ts >= max_age:
+            i = issue_by_key(s.get("org"), key)
+            _kept_cache[(s.get("org"), key)] = (time.time(), i)
+        if i:
+            out.append({**i, "org": s.get("org"), "source": "jira" if s.get("org") and jira_conf(s.get("org")) else "linear", "kept": True})
+    return out
+
+
 def linear_fetch(key):
     req = urllib.request.Request(
         "https://api.linear.app/graphql",
@@ -183,7 +228,8 @@ def linear_fetch(key):
             issues, err = None, body["errors"][0].get("message", tr("erro do Linear"))
         else:
             # Sub-issues ficam fora do quadro: o card da issue mãe já representa o trabalho
-            issues, err = [i for i in body["data"]["issues"]["nodes"] if not i.get("parent")], None
+            issues, err = [{**i, "assignee": (i.get("assignee") or {}).get("name")} for i in body["data"]["issues"]["nodes"]
+                           if not i.get("parent")], None
     except Exception as e:  # rede, 401, timeout: mostra na tela e mantém o resto do quadro
         issues, err = None, f"Linear: {e}"
     return issues, err
@@ -2526,13 +2572,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.wfile.write(data)
         if self.path == "/api/state":
             issues, err = tracker_issues()
-            tasks = [task_as_issue(t) for t in load_tasks()]
-            issues, board = issues or [], load_board()
+            tasks, sess = [task_as_issue(t) for t in load_tasks()], sessions()
+            # Card com sessão aberta não some porque a issue saiu do seu filtro (reatribuída para revisão, por exemplo)
+            kept = kept_issues(issues + tasks, sess) if issues is not None else []
+            issues, board = (issues or []) + kept, load_board()
             # Organização trocada à mão no card (board.json "org") vale para o quadro inteiro: filtro, sessão, Jarvis
             cards_out = [{**i, "org": board.get(i["identifier"], {}).get("org") or i.get("org"), "source_org": i.get("org")}
                          for i in issues + tasks]
             return self._json(200, {"issues": cards_out, "linear_count": len(issues), "orgs": org_list(), "active_org": active_org(), "cards": load_board(), "settings": load_settings(), "tts": tts_ready(), "voice": VOICE,
-                                    "linear_error": err, "sessions": sessions(),
+                                    "linear_error": err, "sessions": sess,
                                     "repos": launch_dirs(), "tmux": TMUX,
                                     "repo_info": {p: {"org": org_of(p), "git": (Path(p) / ".git").exists()} for p in launch_dirs()},
                                     "slack": slack_state(), "hibernated": hibernated(), "hooks": hooks_status()})
